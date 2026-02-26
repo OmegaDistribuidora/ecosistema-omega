@@ -1,13 +1,15 @@
 ﻿<%- include('partials/head', { title, theme }) %>
 
-<main class="dashboard-page">
-  <header class="dashboard-top glass-card">
-    <div class="brand-block">
-      <% if (theme && theme.logo_url) { %>
-        <img src="<%= theme.logo_url %>" alt="Logo" class="brand-logo" />
-      <% } %>
+<main class="dashboard-page omega-page">
+  <header class="dashboard-top glass-card omega-header">
+    <div class="brand-block brand-block-omega">
+      <img
+        src="<%= (theme && theme.logo_url) || '/public/assets/omega-logo.svg' %>"
+        alt="Omega Distribuidora"
+        class="omega-logo"
+      />
       <h1><%= (theme && theme.app_name) || 'Ecossistema Omega' %></h1>
-      <p><%= (theme && theme.hero_title) || 'Central de Sistemas' %></p>
+      <p><%= (theme && theme.hero_title) || 'Central de Sistemas da Omega Distribuidora' %></p>
     </div>
 
     <div class="dashboard-actions">
@@ -21,23 +23,55 @@
     </div>
   </header>
 
-  <section class="selector-card glass-card">
+  <section class="selector-card glass-card omega-selector">
     <%- include('partials/flash', { flash }) %>
 
-    <h2>Escolha um sistema</h2>
-    <p class="muted">Ao clicar, o sistema abre em uma nova aba.</p>
+    <div class="selector-intro">
+      <div>
+        <h2>Sistemas da Omega</h2>
+        <p class="muted">Lista vertical com preview ao passar o mouse. Clique para abrir em nova aba.</p>
+      </div>
+      <img src="/public/assets/omega-mascot.svg" alt="Personagem Omega" class="omega-mascot" />
+    </div>
 
-    <div class="system-center-grid">
-      <% if (!systems.length) { %>
-        <p class="muted">Sem sistemas liberados para seu usuario.</p>
-      <% } %>
+    <div class="systems-browser">
+      <nav class="system-vertical-list" data-preview-list>
+        <% if (!systems.length) { %>
+          <p class="muted">Sem sistemas liberados para seu usuario.</p>
+        <% } %>
 
-      <% systems.forEach((system) => { %>
-        <a class="system-link" href="<%= system.url %>" target="_blank" rel="noopener noreferrer">
-          <span><%= system.name %></span>
-          <small><%= system.description || 'Acessar sistema' %></small>
-        </a>
-      <% }) %>
+        <% systems.forEach((system) => { %>
+          <a
+            class="system-item"
+            href="<%= system.url %>"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-preview-link
+            data-preview-url="<%= system.url %>"
+            data-preview-title="<%= system.name %>"
+          >
+            <span><%= system.name %></span>
+            <small><%= system.description || 'Acessar sistema' %></small>
+          </a>
+        <% }) %>
+      </nav>
+
+      <aside class="preview-panel">
+        <h3 data-preview-title>Passe o mouse sobre um sistema</h3>
+        <div class="preview-frame-wrap">
+          <div class="preview-placeholder" data-preview-placeholder>
+            O preview sera exibido aqui.
+          </div>
+          <iframe
+            class="preview-frame hidden"
+            title="Preview do sistema"
+            data-preview-frame
+            loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+          ></iframe>
+        </div>
+        <p class="muted small">Alguns sistemas podem bloquear incorporacao por seguranca (X-Frame-Options/CSP).</p>
+      </aside>
     </div>
   </section>
 </main>

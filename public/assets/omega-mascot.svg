@@ -1,0 +1,35 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 340" role="img" aria-labelledby="title desc">
+  <title id="title">Personagem Omega</title>
+  <desc id="desc">Ilustracao vetorial estilizada para identidade visual</desc>
+  <defs>
+    <linearGradient id="coat" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b64f0"/>
+      <stop offset="1" stop-color="#173eaa"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1f57"/>
+      <stop offset="1" stop-color="#061338"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff9a4a"/>
+      <stop offset="1" stop-color="#ff6a00"/>
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="130" cy="312" rx="90" ry="14" fill="rgba(0,0,0,.35)"/>
+  <path d="M77 178h106l22 106H55l22-106Z" fill="url(#coat)"/>
+  <path d="M95 198h70l14 78H81l14-78Z" fill="#0f2d7e"/>
+  <path d="M111 207h38l-8 40h-22l-8-40Z" fill="url(#accent)"/>
+
+  <circle cx="130" cy="108" r="54" fill="#f8d2b5"/>
+  <path d="M74 98c0-31 25-56 56-56s56 25 56 56v20h-18V98c0-21-17-38-38-38s-38 17-38 38v20H74V98Z" fill="url(#hair)"/>
+  <circle cx="111" cy="106" r="4" fill="#1a202c"/>
+  <circle cx="149" cy="106" r="4" fill="#1a202c"/>
+  <path d="M112 130c5 6 13 10 18 10 6 0 13-3 18-10" stroke="#7a3720" stroke-width="4" fill="none" stroke-linecap="round"/>
+
+  <rect x="102" y="162" width="56" height="18" rx="9" fill="#f8d2b5"/>
+  <path d="M102 178h56c18 0 28 8 28 24v10H74v-10c0-16 10-24 28-24Z" fill="#e8eefc"/>
+
+  <path d="M96 228h68" stroke="rgba(255,255,255,.35)" stroke-width="4"/>
+  <path d="M88 248h84" stroke="rgba(255,255,255,.2)" stroke-width="4"/>
+</svg>

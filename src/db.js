@@ -521,6 +521,31 @@ async function createSystem({ name, url, description, allowedUserIds }) {
   return tx({ name, url, description, allowedUserIds: safeUserIds });
 }
 
+async function updateSystem(systemId, { name, url, description }) {
+  if (isPostgres) {
+    const result = await pgPool.query(
+      `UPDATE systems
+       SET name = $2,
+           url = $3,
+           description = $4
+       WHERE id = $1`,
+      [systemId, name, url, description || null]
+    );
+    return result.rowCount > 0;
+  }
+
+  const result = sqliteDb
+    .prepare(
+      `UPDATE systems
+       SET name = ?,
+           url = ?,
+           description = ?
+       WHERE id = ?`
+    )
+    .run(name, url, description || null, systemId);
+  return result.changes > 0;
+}
+
 async function getUserAccessibleSystems(userId, isAdmin) {
   if (isAdmin) {
     return listSystems({ includeInactive: false });
@@ -566,6 +591,7 @@ module.exports = {
   updateUserSystemAccess,
   listSystems,
   createSystem,
+  updateSystem,
   getUserAccessibleSystems,
   getSettings,
   updateSettings,

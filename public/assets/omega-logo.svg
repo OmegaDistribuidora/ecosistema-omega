@@ -1,0 +1,25 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 170" role="img" aria-labelledby="title desc">
+  <title id="title">Logo Omega Distribuidora</title>
+  <desc id="desc">Marca estilizada com simbolo omega e tipografia</desc>
+  <defs>
+    <linearGradient id="gBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d4fd7"/>
+      <stop offset="1" stop-color="#0b2f8b"/>
+    </linearGradient>
+    <linearGradient id="gOrange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff9a4a"/>
+      <stop offset="1" stop-color="#ff6a00"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(10,20)">
+    <path fill="url(#gBlue)" d="M115 26c-22-21-58-21-80 0C16 45 7 71 11 96c4 24 20 45 42 54h35c3-12 9-22 18-30H57c-10-7-16-18-18-30-2-15 3-30 14-41 10-10 26-16 41-14 11 1 21 6 29 14l18-23Z"/>
+    <path fill="url(#gBlue)" d="M96 150h40c21-10 37-30 41-54 4-25-5-51-24-70-23-21-58-21-80 0l17 23c8-8 18-13 29-14 15-2 31 4 41 14 11 11 16 26 14 41-2 12-8 23-18 30h-48c9 8 15 18 18 30Z"/>
+    <path fill="url(#gOrange)" d="M77 72h90l-12 15H65l12-15Zm-14 27h90l-12 15H51l12-15Zm-13 27h90l-12 15H38l12-15Z"/>
+  </g>
+
+  <g fill="#ecf2ff" transform="translate(210,44)">
+    <text x="0" y="62" font-size="72" font-family="Space Grotesk, Outfit, sans-serif" font-weight="700" letter-spacing="1.5">ÔMEGA</text>
+    <text x="4" y="96" font-size="30" font-family="Outfit, sans-serif" font-weight="600" letter-spacing="6">DISTRIBUIDORA</text>
+  </g>
+</svg>

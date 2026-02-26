@@ -1,10 +1,17 @@
 ﻿<%- include('partials/head', { title, theme: settings || theme }) %>
 
-<main class="admin-page">
-  <header class="page-header glass-card">
-    <div>
-      <h1>Painel Administrativo</h1>
-      <p>Gerencie usuarios, sistemas e permissoes do Ecossistema Omega.</p>
+<main class="admin-page omega-page">
+  <header class="page-header glass-card omega-header">
+    <div class="admin-header-left">
+      <img
+        src="<%= (theme && theme.logo_url) || '/public/assets/omega-logo.svg' %>"
+        alt="Omega Distribuidora"
+        class="omega-logo"
+      />
+      <div>
+        <h1>Painel Administrativo</h1>
+        <p>Gerencie usuarios, sistemas e permissoes do Ecossistema Omega.</p>
+      </div>
     </div>
 
     <div class="page-actions">
@@ -90,8 +97,8 @@
 
   <%- include('partials/flash', { flash }) %>
 
-  <section class="glass-card">
-    <h2>Permissoes por Usuario</h2>
+  <section class="glass-card admin-section">
+    <h2 class="section-title">Permissoes por Usuario</h2>
     <div class="users-grid">
       <% users.forEach((user) => { %>
         <article class="user-card">
@@ -124,6 +131,34 @@
             </form>
           <% } %>
         </article>
+      <% }) %>
+    </div>
+  </section>
+
+  <section class="glass-card admin-section">
+    <h2 class="section-title">Editar Sistemas Cadastrados</h2>
+    <div class="systems-admin-list">
+      <% systems.forEach((system) => { %>
+        <form method="post" action="/admin/systems/<%= system.id %>" class="system-edit-row">
+          <div class="system-edit-grid">
+            <label>
+              Nome
+              <input type="text" name="name" value="<%= system.name %>" required />
+            </label>
+
+            <label>
+              Link
+              <input type="url" name="url" value="<%= system.url %>" required />
+            </label>
+
+            <label>
+              Descricao
+              <input type="text" name="description" value="<%= system.description || '' %>" />
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Salvar Alteracoes</button>
+        </form>
       <% }) %>
     </div>
   </section>

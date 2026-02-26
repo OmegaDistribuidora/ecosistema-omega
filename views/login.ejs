@@ -1,11 +1,13 @@
 ﻿<%- include('partials/head', { title, theme }) %>
 
-<main class="auth-page" style="background-image: linear-gradient(160deg, rgba(2, 6, 23, .86), rgba(15, 23, 42, .76)), url('<%= (theme && theme.background_url) || '' %>');">
-  <section class="glass-card auth-card">
+<main class="auth-page omega-page" style="background-image: linear-gradient(160deg, rgba(4, 10, 30, .88), rgba(5, 16, 47, .82)), url('<%= (theme && theme.background_url) || '' %>');">
+  <section class="glass-card auth-card omega-login-card">
     <div class="auth-brand">
-      <% if (theme && theme.logo_url) { %>
-        <img src="<%= theme.logo_url %>" alt="Logo" class="brand-logo" />
-      <% } %>
+      <img
+        src="<%= (theme && theme.logo_url) || '/public/assets/omega-logo.svg' %>"
+        alt="Omega Distribuidora"
+        class="omega-logo"
+      />
       <h1><%= (theme && theme.app_name) || 'Ecossistema Omega' %></h1>
       <p><%= (theme && theme.hero_subtitle) || 'Acesso centralizado aos sistemas da empresa.' %></p>
     </div>

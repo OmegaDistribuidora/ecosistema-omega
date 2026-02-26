@@ -14,9 +14,9 @@ const {
   updateUserSystemAccess,
   listSystems,
   createSystem,
+  updateSystem,
   getUserAccessibleSystems,
   getSettings,
-  updateSettings,
   getDatabaseEngineLabel
 } = require('./src/db');
 
@@ -295,28 +295,35 @@ app.post('/admin/systems', requireAuth, requireAdmin, async (req, res, next) => 
   }
 });
 
-app.post('/admin/theme', requireAuth, requireAdmin, async (req, res, next) => {
+app.post('/admin/systems/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const allowedKeys = [
-      'app_name',
-      'hero_title',
-      'hero_subtitle',
-      'logo_url',
-      'background_url',
-      'primary_color',
-      'secondary_color',
-      'accent_color',
-      'surface_color',
-      'text_color'
-    ];
+    const systemId = Number(req.params.id);
+    const name = String(req.body.name || '').trim();
+    const url = String(req.body.url || '').trim();
+    const description = String(req.body.description || '').trim();
 
-    const patch = {};
-    for (const key of allowedKeys) {
-      patch[key] = String(req.body[key] || '').trim();
+    if (!Number.isInteger(systemId) || systemId <= 0) {
+      setFlash(req, 'error', 'Sistema invalido.');
+      return res.redirect('/admin');
     }
 
-    await updateSettings(patch);
-    setFlash(req, 'success', 'Tema atualizado com sucesso.');
+    if (!name || !url) {
+      setFlash(req, 'error', 'Nome e link do sistema sao obrigatorios.');
+      return res.redirect('/admin');
+    }
+
+    if (!/^https?:\/\//i.test(url)) {
+      setFlash(req, 'error', 'Informe uma URL valida com http:// ou https://');
+      return res.redirect('/admin');
+    }
+
+    const updated = await updateSystem(systemId, { name, url, description });
+    if (!updated) {
+      setFlash(req, 'error', 'Sistema nao encontrado.');
+      return res.redirect('/admin');
+    }
+
+    setFlash(req, 'success', `Sistema ${name} atualizado com sucesso.`);
     res.redirect('/admin');
   } catch (error) {
     next(error);
