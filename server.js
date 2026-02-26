@@ -25,6 +25,10 @@ const PORT = Number(process.env.PORT || 3000);
 const SESSION_SECRET = process.env.SESSION_SECRET || 'change-this-in-production';
 const dataDir = path.join(__dirname, 'data');
 
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
@@ -39,6 +43,7 @@ app.use(
       dir: dataDir
     }),
     secret: SESSION_SECRET,
+    proxy: process.env.NODE_ENV === 'production',
     resave: false,
     saveUninitialized: false,
     cookie: {
