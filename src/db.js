@@ -1,19 +1,155 @@
 ﻿const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
 const bcrypt = require('bcrypt');
+const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 
-const dataDir = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+const isPostgres = Boolean(process.env.DATABASE_URL);
+
+const defaultSettings = {
+  app_name: 'Ecossistema Omega',
+  hero_title: 'Central de Sistemas',
+  hero_subtitle: 'Acesse todos os sistemas em um unico lugar.',
+  logo_url: '',
+  background_url: '',
+  primary_color: '#03a9f4',
+  secondary_color: '#0d1b2a',
+  accent_color: '#35d0a0',
+  surface_color: '#111827',
+  text_color: '#f8fafc'
+};
+
+const defaultSystems = [
+  {
+    name: 'Controle de Ponto',
+    url: 'https://controle-ponto.up.railway.app/',
+    description: 'Registro de ponto e jornada'
+  },
+  {
+    name: 'Lancamento Omega',
+    url: 'https://lancamento-omega.up.railway.app/',
+    description: 'Lancamentos operacionais'
+  },
+  {
+    name: 'Despesas Omega',
+    url: 'https://despesas-omega.up.railway.app/',
+    description: 'Controle de despesas'
+  },
+  {
+    name: 'Forms Omega',
+    url: 'https://forms-omega.up.railway.app/admin/login/',
+    description: 'Formularios e administracao'
+  }
+];
+
+let sqliteDb = null;
+let pgPool = null;
+
+function normalizeIdArray(rawIds) {
+  const ids = Array.isArray(rawIds) ? rawIds : [];
+  return [...new Set(ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
 }
 
-const dbPath = path.join(dataDir, 'ecosistema.sqlite');
-const db = new Database(dbPath);
-db.pragma('foreign_keys = ON');
+function buildPgSsl() {
+  if (process.env.DATABASE_SSL === 'false') {
+    return false;
+  }
 
-function runSchema() {
-  db.exec(`
+  if (process.env.NODE_ENV === 'production') {
+    return { rejectUnauthorized: false };
+  }
+
+  return false;
+}
+
+async function initializePostgres() {
+  pgPool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: buildPgSsl()
+  });
+
+  await pgPool.query('SELECT 1');
+
+  await pgPool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS systems (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      description TEXT,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS user_system_access (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      system_id INTEGER NOT NULL REFERENCES systems(id) ON DELETE CASCADE,
+      PRIMARY KEY (user_id, system_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+
+  for (const [key, value] of Object.entries(defaultSettings)) {
+    await pgPool.query(
+      'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING',
+      [key, value]
+    );
+  }
+
+  const userCountResult = await pgPool.query('SELECT COUNT(*)::int AS count FROM users');
+  if (userCountResult.rows[0].count === 0) {
+    const hash = bcrypt.hashSync('Omega@123', 12);
+    await pgPool.query(
+      'INSERT INTO users (username, password_hash, is_admin) VALUES ($1, $2, TRUE)',
+      ['admin', hash]
+    );
+  }
+
+  const systemCountResult = await pgPool.query('SELECT COUNT(*)::int AS count FROM systems');
+  if (systemCountResult.rows[0].count === 0) {
+    for (const system of defaultSystems) {
+      await pgPool.query(
+        'INSERT INTO systems (name, url, description, is_active) VALUES ($1, $2, $3, TRUE)',
+        [system.name, system.url, system.description]
+      );
+    }
+  }
+
+  const adminResult = await pgPool.query('SELECT id FROM users WHERE username = $1 LIMIT 1', ['admin']);
+  if (adminResult.rows.length > 0) {
+    const adminId = adminResult.rows[0].id;
+    await pgPool.query(
+      `INSERT INTO user_system_access (user_id, system_id)
+       SELECT $1, s.id
+       FROM systems s
+       ON CONFLICT (user_id, system_id) DO NOTHING`,
+      [adminId]
+    );
+  }
+}
+
+function initializeSqlite() {
+  const dataDir = path.join(__dirname, '..', 'data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  const dbPath = path.join(dataDir, 'ecosistema.sqlite');
+  sqliteDb = new Database(dbPath);
+  sqliteDb.pragma('foreign_keys = ON');
+
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
@@ -44,165 +180,337 @@ function runSchema() {
       value TEXT NOT NULL
     );
   `);
-}
 
-function ensureDefaultSettings() {
-  const defaults = {
-    app_name: 'Ecossistema Omega',
-    hero_title: 'Central de Sistemas',
-    hero_subtitle: 'Acesse todos os sistemas em um unico lugar.',
-    logo_url: '',
-    background_url: '',
-    primary_color: '#03a9f4',
-    secondary_color: '#0d1b2a',
-    accent_color: '#35d0a0',
-    surface_color: '#111827',
-    text_color: '#f8fafc'
-  };
-
-  const insert = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
-  for (const [key, value] of Object.entries(defaults)) {
-    insert.run(key, value);
+  const insertSetting = sqliteDb.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+  for (const [key, value] of Object.entries(defaultSettings)) {
+    insertSetting.run(key, value);
   }
-}
 
-function seedData() {
-  const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
+  const userCount = sqliteDb.prepare('SELECT COUNT(*) AS count FROM users').get().count;
   if (userCount === 0) {
     const hash = bcrypt.hashSync('Omega@123', 12);
-    db.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('admin', hash);
+    sqliteDb
+      .prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)')
+      .run('admin', hash);
   }
 
-  const systemCount = db.prepare('SELECT COUNT(*) AS count FROM systems').get().count;
+  const systemCount = sqliteDb.prepare('SELECT COUNT(*) AS count FROM systems').get().count;
   if (systemCount === 0) {
-    const insertSystem = db.prepare('INSERT INTO systems (name, url, description, is_active) VALUES (?, ?, ?, 1)');
-    insertSystem.run('Controle de Ponto', 'https://controle-ponto.up.railway.app/', 'Registro de ponto e jornada');
-    insertSystem.run('Lancamento Omega', 'https://lancamento-omega.up.railway.app/', 'Lancamentos operacionais');
-    insertSystem.run('Despesas Omega', 'https://despesas-omega.up.railway.app/', 'Controle de despesas');
-    insertSystem.run('Forms Omega', 'https://forms-omega.up.railway.app/admin/login/', 'Formularios e administracao');
+    const insertSystem = sqliteDb.prepare(
+      'INSERT INTO systems (name, url, description, is_active) VALUES (?, ?, ?, 1)'
+    );
+    for (const system of defaultSystems) {
+      insertSystem.run(system.name, system.url, system.description);
+    }
   }
 
-  const admin = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
+  const admin = sqliteDb.prepare('SELECT id FROM users WHERE username = ?').get('admin');
   if (admin) {
-    const systems = db.prepare('SELECT id FROM systems').all();
-    const grant = db.prepare('INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)');
+    const systems = sqliteDb.prepare('SELECT id FROM systems').all();
+    const grant = sqliteDb.prepare(
+      'INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)'
+    );
     for (const system of systems) {
       grant.run(admin.id, system.id);
     }
   }
 }
 
-runSchema();
-ensureDefaultSettings();
-seedData();
-
-function getSettings() {
-  const rows = db.prepare('SELECT key, value FROM settings').all();
-  return rows.reduce((acc, row) => {
-    acc[row.key] = row.value;
-    return acc;
-  }, {});
+async function initializeDatabase() {
+  if (isPostgres) {
+    await initializePostgres();
+    return;
+  }
+  initializeSqlite();
 }
 
-function updateSettings(settingsPatch) {
-  const upsert = db.prepare(`
+async function getSettings() {
+  if (isPostgres) {
+    const result = await pgPool.query('SELECT key, value FROM settings');
+    const settings = { ...defaultSettings };
+    for (const row of result.rows) {
+      settings[row.key] = row.value;
+    }
+    return settings;
+  }
+
+  const rows = sqliteDb.prepare('SELECT key, value FROM settings').all();
+  const settings = { ...defaultSettings };
+  for (const row of rows) {
+    settings[row.key] = row.value;
+  }
+  return settings;
+}
+
+async function updateSettings(settingsPatch) {
+  const entries = Object.entries(settingsPatch || {});
+  if (!entries.length) {
+    return;
+  }
+
+  if (isPostgres) {
+    for (const [key, value] of entries) {
+      await pgPool.query(
+        `INSERT INTO settings (key, value)
+         VALUES ($1, $2)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [key, String(value ?? '')]
+      );
+    }
+    return;
+  }
+
+  const upsert = sqliteDb.prepare(`
     INSERT INTO settings (key, value)
     VALUES (@key, @value)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `);
 
-  const tx = db.transaction((patch) => {
-    for (const [key, value] of Object.entries(patch)) {
+  const tx = sqliteDb.transaction((items) => {
+    for (const [key, value] of items) {
       upsert.run({ key, value: String(value ?? '') });
     }
   });
 
-  tx(settingsPatch);
+  tx(entries);
 }
 
-function findUserByUsername(username) {
-  return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+async function findUserByUsername(username) {
+  if (isPostgres) {
+    const result = await pgPool.query('SELECT * FROM users WHERE username = $1 LIMIT 1', [username]);
+    return result.rows[0] || null;
+  }
+
+  return sqliteDb.prepare('SELECT * FROM users WHERE username = ?').get(username) || null;
 }
 
-function findUserById(id) {
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+async function findUserById(id) {
+  if (isPostgres) {
+    const result = await pgPool.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [id]);
+    return result.rows[0] || null;
+  }
+
+  return sqliteDb.prepare('SELECT * FROM users WHERE id = ?').get(id) || null;
 }
 
-function listUsers() {
-  return db.prepare(`
-    SELECT
-      u.id,
-      u.username,
-      u.is_admin,
-      u.created_at,
-      COALESCE(GROUP_CONCAT(usa.system_id), '') AS system_ids,
-      COALESCE(GROUP_CONCAT(s.name, ', '), '') AS system_names
-    FROM users u
-    LEFT JOIN user_system_access usa ON usa.user_id = u.id
-    LEFT JOIN systems s ON s.id = usa.system_id
-    GROUP BY u.id
-    ORDER BY u.is_admin DESC, u.username ASC
-  `).all();
+async function listUsers() {
+  if (isPostgres) {
+    const result = await pgPool.query(`
+      SELECT
+        u.id,
+        u.username,
+        u.is_admin,
+        u.created_at,
+        COALESCE(string_agg(usa.system_id::text, ',' ORDER BY usa.system_id), '') AS system_ids,
+        COALESCE(string_agg(s.name, ', ' ORDER BY s.name), '') AS system_names
+      FROM users u
+      LEFT JOIN user_system_access usa ON usa.user_id = u.id
+      LEFT JOIN systems s ON s.id = usa.system_id
+      GROUP BY u.id
+      ORDER BY u.is_admin DESC, u.username ASC
+    `);
+    return result.rows;
+  }
+
+  return sqliteDb
+    .prepare(`
+      SELECT
+        u.id,
+        u.username,
+        u.is_admin,
+        u.created_at,
+        COALESCE(GROUP_CONCAT(usa.system_id), '') AS system_ids,
+        COALESCE(GROUP_CONCAT(s.name, ', '), '') AS system_names
+      FROM users u
+      LEFT JOIN user_system_access usa ON usa.user_id = u.id
+      LEFT JOIN systems s ON s.id = usa.system_id
+      GROUP BY u.id
+      ORDER BY u.is_admin DESC, u.username ASC
+    `)
+    .all();
 }
 
-function listUsersBasic() {
-  return db.prepare('SELECT id, username, is_admin FROM users ORDER BY username ASC').all();
+async function listUsersBasic() {
+  if (isPostgres) {
+    const result = await pgPool.query('SELECT id, username, is_admin FROM users ORDER BY username ASC');
+    return result.rows;
+  }
+
+  return sqliteDb
+    .prepare('SELECT id, username, is_admin FROM users ORDER BY username ASC')
+    .all();
 }
 
-function createUser({ username, password, isAdmin, systemIds }) {
-  const tx = db.transaction((payload) => {
+async function createUser({ username, password, isAdmin, systemIds }) {
+  if (isPostgres) {
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      const passwordHash = bcrypt.hashSync(password, 12);
+      const userInsert = await client.query(
+        'INSERT INTO users (username, password_hash, is_admin) VALUES ($1, $2, $3) RETURNING id',
+        [username, passwordHash, Boolean(isAdmin)]
+      );
+
+      const userId = userInsert.rows[0].id;
+      let allowedSystemIds = normalizeIdArray(systemIds);
+
+      if (isAdmin) {
+        const systems = await client.query('SELECT id FROM systems WHERE is_active = TRUE');
+        allowedSystemIds = systems.rows.map((row) => row.id);
+      }
+
+      for (const systemId of allowedSystemIds) {
+        await client.query(
+          'INSERT INTO user_system_access (user_id, system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [userId, systemId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return Number(userId);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  const tx = sqliteDb.transaction((payload) => {
     const passwordHash = bcrypt.hashSync(payload.password, 12);
-    const result = db.prepare(
-      'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)'
-    ).run(payload.username, passwordHash, payload.isAdmin ? 1 : 0);
+    const result = sqliteDb
+      .prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)')
+      .run(payload.username, passwordHash, payload.isAdmin ? 1 : 0);
 
-    const userId = result.lastInsertRowid;
-
+    const userId = Number(result.lastInsertRowid);
     const ids = payload.isAdmin
-      ? db.prepare('SELECT id FROM systems WHERE is_active = 1').all().map((row) => row.id)
-      : payload.systemIds;
+      ? sqliteDb
+          .prepare('SELECT id FROM systems WHERE is_active = 1')
+          .all()
+          .map((row) => row.id)
+      : normalizeIdArray(payload.systemIds);
 
-    const grant = db.prepare('INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)');
+    const grant = sqliteDb.prepare(
+      'INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)'
+    );
     for (const systemId of ids) {
       grant.run(userId, systemId);
     }
 
-    return Number(userId);
+    return userId;
   });
 
   return tx({ username, password, isAdmin, systemIds });
 }
 
-function updateUserSystemAccess(userId, systemIds) {
-  const tx = db.transaction((uid, ids) => {
-    db.prepare('DELETE FROM user_system_access WHERE user_id = ?').run(uid);
-    const grant = db.prepare('INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)');
-    for (const systemId of ids) {
+async function updateUserSystemAccess(userId, systemIds) {
+  const ids = normalizeIdArray(systemIds);
+
+  if (isPostgres) {
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM user_system_access WHERE user_id = $1', [userId]);
+      for (const systemId of ids) {
+        await client.query(
+          'INSERT INTO user_system_access (user_id, system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [userId, systemId]
+        );
+      }
+      await client.query('COMMIT');
+      return;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  const tx = sqliteDb.transaction((uid, safeIds) => {
+    sqliteDb.prepare('DELETE FROM user_system_access WHERE user_id = ?').run(uid);
+    const grant = sqliteDb.prepare(
+      'INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)'
+    );
+    for (const systemId of safeIds) {
       grant.run(uid, systemId);
     }
   });
 
-  tx(userId, systemIds);
+  tx(userId, ids);
 }
 
-function listSystems({ includeInactive = true } = {}) {
-  if (includeInactive) {
-    return db.prepare('SELECT * FROM systems ORDER BY name ASC').all();
+async function listSystems({ includeInactive = true } = {}) {
+  if (isPostgres) {
+    if (includeInactive) {
+      const result = await pgPool.query('SELECT * FROM systems ORDER BY name ASC');
+      return result.rows;
+    }
+    const result = await pgPool.query('SELECT * FROM systems WHERE is_active = TRUE ORDER BY name ASC');
+    return result.rows;
   }
-  return db.prepare('SELECT * FROM systems WHERE is_active = 1 ORDER BY name ASC').all();
+
+  if (includeInactive) {
+    return sqliteDb.prepare('SELECT * FROM systems ORDER BY name ASC').all();
+  }
+  return sqliteDb
+    .prepare('SELECT * FROM systems WHERE is_active = 1 ORDER BY name ASC')
+    .all();
 }
 
-function createSystem({ name, url, description, allowedUserIds }) {
-  const tx = db.transaction((payload) => {
-    const result = db.prepare(
-      'INSERT INTO systems (name, url, description, is_active) VALUES (?, ?, ?, 1)'
-    ).run(payload.name, payload.url, payload.description || null);
+async function createSystem({ name, url, description, allowedUserIds }) {
+  const safeUserIds = normalizeIdArray(allowedUserIds);
+
+  if (isPostgres) {
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      const inserted = await client.query(
+        'INSERT INTO systems (name, url, description, is_active) VALUES ($1, $2, $3, TRUE) RETURNING id',
+        [name, url, description || null]
+      );
+
+      const systemId = inserted.rows[0].id;
+      const adminsResult = await client.query('SELECT id FROM users WHERE is_admin = TRUE');
+      const allAllowedUsers = new Set([
+        ...safeUserIds,
+        ...adminsResult.rows.map((row) => Number(row.id))
+      ]);
+
+      for (const userId of allAllowedUsers) {
+        await client.query(
+          'INSERT INTO user_system_access (user_id, system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [userId, systemId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return Number(systemId);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  const tx = sqliteDb.transaction((payload) => {
+    const result = sqliteDb
+      .prepare('INSERT INTO systems (name, url, description, is_active) VALUES (?, ?, ?, 1)')
+      .run(payload.name, payload.url, payload.description || null);
 
     const systemId = Number(result.lastInsertRowid);
-    const admins = db.prepare('SELECT id FROM users WHERE is_admin = 1').all().map((row) => row.id);
-    const userIds = new Set([...(payload.allowedUserIds || []), ...admins]);
+    const admins = sqliteDb
+      .prepare('SELECT id FROM users WHERE is_admin = 1')
+      .all()
+      .map((row) => row.id);
+    const userIds = new Set([...normalizeIdArray(payload.allowedUserIds), ...admins]);
 
-    const grant = db.prepare('INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)');
+    const grant = sqliteDb.prepare(
+      'INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)'
+    );
+
     for (const userId of userIds) {
       grant.run(userId, systemId);
     }
@@ -210,26 +518,46 @@ function createSystem({ name, url, description, allowedUserIds }) {
     return systemId;
   });
 
-  return tx({ name, url, description, allowedUserIds });
+  return tx({ name, url, description, allowedUserIds: safeUserIds });
 }
 
-function getUserAccessibleSystems(userId, isAdmin) {
+async function getUserAccessibleSystems(userId, isAdmin) {
   if (isAdmin) {
     return listSystems({ includeInactive: false });
   }
 
-  return db.prepare(`
-    SELECT s.*
-    FROM systems s
-    INNER JOIN user_system_access usa ON usa.system_id = s.id
-    WHERE usa.user_id = ?
-      AND s.is_active = 1
-    ORDER BY s.name ASC
-  `).all(userId);
+  if (isPostgres) {
+    const result = await pgPool.query(
+      `SELECT s.*
+       FROM systems s
+       INNER JOIN user_system_access usa ON usa.system_id = s.id
+       WHERE usa.user_id = $1
+         AND s.is_active = TRUE
+       ORDER BY s.name ASC`,
+      [userId]
+    );
+
+    return result.rows;
+  }
+
+  return sqliteDb
+    .prepare(
+      `SELECT s.*
+       FROM systems s
+       INNER JOIN user_system_access usa ON usa.system_id = s.id
+       WHERE usa.user_id = ?
+         AND s.is_active = 1
+       ORDER BY s.name ASC`
+    )
+    .all(userId);
+}
+
+function getDatabaseEngineLabel() {
+  return isPostgres ? 'postgres' : 'sqlite';
 }
 
 module.exports = {
-  db,
+  initializeDatabase,
   findUserByUsername,
   findUserById,
   listUsers,
@@ -240,5 +568,6 @@ module.exports = {
   createSystem,
   getUserAccessibleSystems,
   getSettings,
-  updateSettings
+  updateSettings,
+  getDatabaseEngineLabel
 };

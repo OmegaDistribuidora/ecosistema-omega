@@ -17,7 +17,8 @@ Portal unificado para acesso aos sistemas da empresa com:
 
 - Node.js
 - Express + EJS
-- SQLite (`better-sqlite3`)
+- PostgreSQL (`pg`) no Railway
+- SQLite (`better-sqlite3`) como fallback local
 - Sessao persistida em SQLite (`connect-sqlite3`)
 
 ## Rodar local
@@ -33,16 +34,19 @@ A aplicacao abre em `http://localhost:3000`.
 
 - `PORT`: porta do servidor (Railway define automaticamente)
 - `SESSION_SECRET`: segredo da sessao (obrigatorio em producao)
+- `DATABASE_URL`: conexao Postgres (quando presente, app usa Postgres)
 - `NODE_ENV=production`
 
 ## Deploy no Railway
 
 1. Suba este repositorio para GitHub.
 2. No Railway, crie um novo projeto e conecte o repo.
-3. Configure as variaveis:
+3. Adicione um banco Postgres no mesmo projeto Railway.
+4. No service `ecosistema-omega`, em **Variables**, clique em **Add Variable** no card roxo e selecione a variavel do Postgres (`DATABASE_URL`).
+5. Configure tambem:
    - `SESSION_SECRET` com um valor forte.
    - `NODE_ENV=production`
-4. Railway detecta Node automaticamente e executa `npm start`.
+6. Railway detecta Node automaticamente e executa `npm start`.
 
 ## Observacao importante sobre "manter o link"
 
