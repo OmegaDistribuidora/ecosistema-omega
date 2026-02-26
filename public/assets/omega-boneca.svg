@@ -1,0 +1,44 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 460" role="img" aria-labelledby="title desc">
+  <title id="title">Boneca Omega</title>
+  <desc id="desc">Personagem feminina com fundo transparente</desc>
+  <defs>
+    <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6d1e0a"/>
+      <stop offset="1" stop-color="#ad3a16"/>
+    </linearGradient>
+    <linearGradient id="shirt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#143b86"/>
+      <stop offset="1" stop-color="#0b244f"/>
+    </linearGradient>
+    <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd3b4"/>
+      <stop offset="1" stop-color="#f0b28c"/>
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="160" cy="426" rx="92" ry="20" fill="rgba(0,0,0,.2)"/>
+
+  <path fill="url(#hair)" d="M54 174c-5-65 35-120 106-120 73 0 111 55 106 120-2 31-16 48-34 69-12 14-13 29-15 45h-114c-2-17-4-31-16-45-18-21-31-38-33-69Z"/>
+  <circle cx="160" cy="168" r="66" fill="url(#skin)"/>
+
+  <ellipse cx="137" cy="165" rx="8" ry="10" fill="#3f220f"/>
+  <ellipse cx="183" cy="165" rx="8" ry="10" fill="#3f220f"/>
+  <circle cx="139" cy="161" r="2" fill="#fff"/>
+  <circle cx="185" cy="161" r="2" fill="#fff"/>
+  <path d="M138 200c6 8 14 12 22 12s16-4 22-12" fill="none" stroke="#8c4424" stroke-width="5" stroke-linecap="round"/>
+
+  <path fill="url(#shirt)" d="M78 278c8-28 31-47 58-47h48c27 0 50 19 58 47l24 104H54l24-104Z"/>
+  <path fill="#0f2f70" d="M94 292h132l18 76H76l18-76Z"/>
+  <path fill="#f7f9ff" d="M91 272h138c12 0 21 10 21 22v6H70v-6c0-12 9-22 21-22Z"/>
+
+  <path fill="#122b5d" d="M118 248c0 16 8 29 18 38l-30 15c-12-8-20-21-20-37 0-20 14-36 32-39Z"/>
+  <path fill="#122b5d" d="M202 248c18 3 32 19 32 39 0 16-8 29-20 37l-30-15c10-9 18-22 18-38Z"/>
+
+  <rect x="147" y="220" width="26" height="30" rx="12" fill="url(#skin)"/>
+
+  <g transform="translate(176,325) scale(.55)">
+    <path fill="#f3f6ff" d="M0 0c-58 0-105 47-105 105 0 39 22 74 54 92h33c2-6 6-12 11-16h-37c-5-4-9-10-10-17-1-8 2-16 8-22 6-6 14-9 22-8 6 1 11 3 15 8l10-12Z"/>
+    <path fill="#f3f6ff" d="M-10 197h20c32-18 51-53 46-92C51 47 4 0-54 0l10 12c4-5 9-7 15-8 8-1 16 2 22 8 6 6 9 14 8 22-1 7-5 13-10 17h-37c5 4 9 10 11 16Z"/>
+    <path fill="#ff7a1b" d="M-22 25h50l-7 9h-36l-7-9Zm-8 15h50l-7 9h-36l-7-9Zm-8 15h50l-7 9h-36l-7-9Z"/>
+  </g>
+</svg>

@@ -207,9 +207,9 @@ fieldset {
 }
 
 .omega-logo {
-  width: clamp(160px, 18vw, 230px);
+  width: clamp(74px, 8vw, 96px);
   height: auto;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .brand-block h1 {
@@ -231,7 +231,7 @@ fieldset {
 
 .omega-header {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .omega-header::after {
@@ -369,12 +369,17 @@ fieldset {
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
+  z-index: 30;
 }
 
 .admin-header-left {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+.admin-header-left .omega-logo {
+  margin-bottom: 0;
 }
 
 .page-actions {
@@ -401,7 +406,7 @@ fieldset {
   top: calc(100% + 10px);
   width: min(560px, 92vw);
   padding: 12px;
-  z-index: 20;
+  z-index: 60;
 }
 
 .admin-dropdown:not([open]) .admin-dropdown-panel {
@@ -432,6 +437,7 @@ fieldset {
   padding: 16px;
   display: grid;
   gap: 12px;
+  z-index: 1;
 }
 
 .section-title {

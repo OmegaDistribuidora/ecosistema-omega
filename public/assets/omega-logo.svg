@@ -1,25 +1,20 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 170" role="img" aria-labelledby="title desc">
-  <title id="title">Logo Omega Distribuidora</title>
-  <desc id="desc">Marca estilizada com simbolo omega e tipografia</desc>
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Omega Marca</title>
+  <desc id="desc">Simbolo omega azul com faixas laranja</desc>
   <defs>
-    <linearGradient id="gBlue" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1d4fd7"/>
-      <stop offset="1" stop-color="#0b2f8b"/>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f1e96"/>
+      <stop offset="1" stop-color="#08106f"/>
     </linearGradient>
-    <linearGradient id="gOrange" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ff9a4a"/>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff9600"/>
       <stop offset="1" stop-color="#ff6a00"/>
     </linearGradient>
   </defs>
 
-  <g transform="translate(10,20)">
-    <path fill="url(#gBlue)" d="M115 26c-22-21-58-21-80 0C16 45 7 71 11 96c4 24 20 45 42 54h35c3-12 9-22 18-30H57c-10-7-16-18-18-30-2-15 3-30 14-41 10-10 26-16 41-14 11 1 21 6 29 14l18-23Z"/>
-    <path fill="url(#gBlue)" d="M96 150h40c21-10 37-30 41-54 4-25-5-51-24-70-23-21-58-21-80 0l17 23c8-8 18-13 29-14 15-2 31 4 41 14 11 11 16 26 14 41-2 12-8 23-18 30h-48c9 8 15 18 18 30Z"/>
-    <path fill="url(#gOrange)" d="M77 72h90l-12 15H65l12-15Zm-14 27h90l-12 15H51l12-15Zm-13 27h90l-12 15H38l12-15Z"/>
-  </g>
+  <path fill="url(#blue)" d="M256 32C136.7 32 40 128.7 40 248c0 81.5 45.2 152.4 111.8 189H68v43h145v-85c-62-19.3-107-77.1-107-147 0-85.1 69.2-154 154-154s154 68.9 154 154c0 69.9-45 127.7-107 147v85h145v-43h-83.8C426.8 400.4 472 329.5 472 248 472 128.7 375.3 32 256 32Z"/>
 
-  <g fill="#ecf2ff" transform="translate(210,44)">
-    <text x="0" y="62" font-size="72" font-family="Space Grotesk, Outfit, sans-serif" font-weight="700" letter-spacing="1.5">ÔMEGA</text>
-    <text x="4" y="96" font-size="30" font-family="Outfit, sans-serif" font-weight="600" letter-spacing="6">DISTRIBUIDORA</text>
-  </g>
+  <path fill="url(#orange)" d="M284 183c20-24 63-35 112-33-22 20-35 41-38 63-38 2-63 11-85 31l11-61Z"/>
+  <path fill="url(#orange)" d="M276 244c23-24 68-35 121-33-24 20-38 41-42 63-42 2-70 11-93 31l14-61Z"/>
+  <path fill="url(#orange)" d="M266 306c26-24 75-35 133-33-26 20-42 41-47 63-46 2-76 11-102 31l16-61Z"/>
 </svg>
