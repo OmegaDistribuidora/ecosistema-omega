@@ -3,6 +3,7 @@ const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
+const multer = require('multer');
 const SQLiteStore = require('connect-sqlite3')(session);
 
 const {
@@ -18,6 +19,7 @@ const {
   updateSystem,
   getUserAccessibleSystems,
   getSettings,
+  updateSettings,
   getDatabaseEngineLabel
 } = require('./src/db');
 
@@ -25,7 +27,100 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const SESSION_SECRET = process.env.SESSION_SECRET || 'change-this-in-production';
 const dataDir = path.join(__dirname, 'data');
-const imagesDir = process.env.IMAGES_DIR || '/images';
+const imagesDir =
+  process.env.IMAGES_DIR ||
+  (process.env.NODE_ENV === 'production' ? '/images' : path.join(__dirname, 'data', 'images'));
+const allowedImageExts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
+
+function ensureImagesDir() {
+  if (fs.existsSync(imagesDir)) {
+    return;
+  }
+  fs.mkdirSync(imagesDir, { recursive: true });
+}
+
+function sanitizeBaseName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .toLowerCase();
+}
+
+function listUploadedImages() {
+  if (!fs.existsSync(imagesDir)) {
+    return [];
+  }
+
+  const files = fs
+    .readdirSync(imagesDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => allowedImageExts.has(path.extname(name).toLowerCase()));
+
+  return files
+    .map((name) => {
+      const fullPath = path.join(imagesDir, name);
+      const stats = fs.statSync(fullPath);
+      return {
+        name,
+        sizeKb: Math.max(1, Math.round(stats.size / 1024)),
+        updatedAt: stats.mtime.toISOString(),
+        url: `/images/${encodeURIComponent(name)}`
+      };
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function buildUploadFileName(target, customName, originalName) {
+  const originalExt = path.extname(originalName || '').toLowerCase();
+  const extension = allowedImageExts.has(originalExt) ? originalExt : '';
+  const safeExt = extension || '.png';
+
+  if (target === 'logo') {
+    return `logo${safeExt}`;
+  }
+
+  if (target === 'aurora') {
+    return `aurora${safeExt}`;
+  }
+
+  const stemFromCustom = sanitizeBaseName(customName);
+  const stemFromFile = sanitizeBaseName(path.basename(originalName || '', originalExt));
+  const stem = stemFromCustom || stemFromFile || 'imagem';
+  return `${stem}-${Date.now()}${safeExt}`;
+}
+
+const imageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      try {
+        ensureImagesDir();
+        cb(null, imagesDir);
+      } catch (error) {
+        cb(error);
+      }
+    },
+    filename: (req, file, cb) => {
+      const target = String(req.body.upload_target || 'custom').toLowerCase();
+      const customName = req.body.custom_name || '';
+      cb(null, buildUploadFileName(target, customName, file.originalname));
+    }
+  }),
+  limits: {
+    fileSize: 8 * 1024 * 1024
+  },
+  fileFilter: (req, file, cb) => {
+    const extension = path.extname(file.originalname || '').toLowerCase();
+    if (!allowedImageExts.has(extension)) {
+      cb(new Error('Tipo de arquivo nao permitido. Use PNG, JPG, JPEG, WEBP, GIF ou SVG.'));
+      return;
+    }
+    cb(null, true);
+  }
+});
 
 if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
@@ -37,8 +132,13 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use('/public', express.static(path.join(__dirname, 'public')));
+try {
+  ensureImagesDir();
+} catch (error) {
+  console.warn(`Nao foi possivel preparar o diretorio de imagens (${imagesDir}):`, error.message);
+}
 if (fs.existsSync(imagesDir)) {
-  app.use('/images', express.static(imagesDir));
+  app.use('/images', express.static(imagesDir, { maxAge: '1h' }));
 }
 app.use('/images', express.static(path.join(__dirname, 'public', 'assets')));
 
@@ -201,7 +301,9 @@ app.get('/admin', requireAuth, requireAdmin, async (req, res, next) => {
       users,
       usersBasic: await listUsersBasic(),
       systems,
-      settings: await getSettings()
+      settings: await getSettings(),
+      uploadedImages: listUploadedImages(),
+      imagesDir
     });
   } catch (error) {
     next(error);
@@ -336,6 +438,36 @@ app.post('/admin/systems/:id', requireAuth, requireAdmin, async (req, res, next)
   }
 });
 
+app.post('/admin/assets/upload', requireAuth, requireAdmin, (req, res, next) => {
+  imageUpload.single('image_file')(req, res, async (error) => {
+    if (error) {
+      setFlash(req, 'error', error.message || 'Falha no upload da imagem.');
+      return res.redirect('/admin');
+    }
+
+    try {
+      if (!req.file) {
+        setFlash(req, 'error', 'Selecione um arquivo de imagem.');
+        return res.redirect('/admin');
+      }
+
+      const target = String(req.body.upload_target || 'custom').toLowerCase();
+      const fileUrl = `/images/${encodeURIComponent(req.file.filename)}`;
+
+      if (target === 'logo') {
+        await updateSettings({ logo_url: fileUrl });
+      } else if (target === 'aurora') {
+        await updateSettings({ mascot_url: fileUrl });
+      }
+
+      setFlash(req, 'success', `Imagem enviada com sucesso: ${req.file.filename}`);
+      res.redirect('/admin');
+    } catch (routeError) {
+      next(routeError);
+    }
+  });
+});
+
 app.use((req, res) => {
   res.status(404).render('error', {
     title: 'Pagina nao encontrada',
@@ -366,4 +498,3 @@ start().catch((error) => {
   console.error('Falha ao iniciar aplicacao:', error);
   process.exit(1);
 });
-

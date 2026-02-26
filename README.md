@@ -59,6 +59,12 @@ Se voce criou um volume em `/images`, salve os arquivos com estes nomes:
 
 O sistema tenta usar esses arquivos automaticamente e aplica fallback local se nao existirem.
 
+Tambem e possivel enviar imagens direto no painel admin:
+
+- Menu `Novo` > aba `Configuracao`
+- Upload rapido de `Logo` e `Aurora`
+- Upload livre para outras imagens (gera URL `/images/...`)
+
 ## Observacao importante sobre "manter o link"
 
 O sistema carrega os apps externos via `iframe`, mantendo o link do Ecossistema.

@@ -11,7 +11,7 @@
       />
       <div>
         <h1>Painel Administrativo</h1>
-        <p>Gerencie usuarios, sistemas e permissoes do Ecossistema Omega.</p>
+        <p>Gerencie usuarios, sistemas, permissoes e imagens do Ecossistema Omega.</p>
       </div>
     </div>
 
@@ -22,6 +22,7 @@
           <div class="admin-dropdown-tabs">
             <button type="button" class="btn btn-secondary" data-admin-tab-button data-tab="user">Novo Usuario</button>
             <button type="button" class="btn btn-secondary" data-admin-tab-button data-tab="system">Novo Sistema</button>
+            <button type="button" class="btn btn-secondary" data-admin-tab-button data-tab="config">Configuracao</button>
           </div>
 
           <div class="admin-dropdown-content">
@@ -88,6 +89,44 @@
 
               <button type="submit" class="btn btn-primary">Adicionar Sistema</button>
             </form>
+
+            <div class="form-stack compact hidden" data-admin-tab-panel="config">
+              <form method="post" action="/admin/assets/upload" enctype="multipart/form-data" class="upload-box">
+                <h3>Trocar Logo</h3>
+                <input type="hidden" name="upload_target" value="logo" />
+                <label>
+                  Arquivo da logo
+                  <input type="file" name="image_file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg" required />
+                </label>
+                <button type="submit" class="btn btn-primary">Enviar Logo</button>
+              </form>
+
+              <form method="post" action="/admin/assets/upload" enctype="multipart/form-data" class="upload-box">
+                <h3>Trocar Aurora</h3>
+                <input type="hidden" name="upload_target" value="aurora" />
+                <label>
+                  Arquivo da Aurora
+                  <input type="file" name="image_file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg" required />
+                </label>
+                <button type="submit" class="btn btn-primary">Enviar Aurora</button>
+              </form>
+
+              <form method="post" action="/admin/assets/upload" enctype="multipart/form-data" class="upload-box">
+                <h3>Upload Livre</h3>
+                <input type="hidden" name="upload_target" value="custom" />
+                <label>
+                  Nome do arquivo (opcional)
+                  <input type="text" name="custom_name" placeholder="banner-home" />
+                </label>
+                <label>
+                  Arquivo de imagem
+                  <input type="file" name="image_file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg" required />
+                </label>
+                <button type="submit" class="btn btn-primary">Enviar Imagem</button>
+              </form>
+
+              <p class="muted small">Pasta de destino: <code><%= imagesDir %></code></p>
+            </div>
           </div>
         </div>
       </details>
@@ -160,6 +199,26 @@
 
           <button type="submit" class="btn btn-primary">Salvar Alteracoes</button>
         </form>
+      <% }) %>
+    </div>
+  </section>
+
+  <section class="glass-card admin-section">
+    <h2 class="section-title">Biblioteca de Imagens</h2>
+    <div class="assets-grid">
+      <% if (!uploadedImages || !uploadedImages.length) { %>
+        <p class="muted">Nenhuma imagem enviada ainda.</p>
+      <% } %>
+
+      <% (uploadedImages || []).forEach((asset) => { %>
+        <article class="asset-card">
+          <img src="<%= asset.url %>" alt="<%= asset.name %>" loading="lazy" />
+          <div class="asset-meta">
+            <strong><%= asset.name %></strong>
+            <small><%= asset.sizeKb %> KB</small>
+            <input type="text" readonly value="<%= asset.url %>" onclick="this.select()" />
+          </div>
+        </article>
       <% }) %>
     </div>
   </section>
