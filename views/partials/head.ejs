@@ -1,0 +1,18 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %></title>
+    <style>
+      :root {
+        --primary: <%= (theme && theme.primary_color) || '#03a9f4' %>;
+        --secondary: <%= (theme && theme.secondary_color) || '#0d1b2a' %>;
+        --accent: <%= (theme && theme.accent_color) || '#35d0a0' %>;
+        --surface: <%= (theme && theme.surface_color) || '#111827' %>;
+        --text: <%= (theme && theme.text_color) || '#f8fafc' %>;
+      }
+    </style>
+    <link rel="stylesheet" href="/public/styles.css" />
+  </head>
+  <body>

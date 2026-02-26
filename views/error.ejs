@@ -1,0 +1,11 @@
+﻿<%- include('partials/head', { title, theme }) %>
+
+<main class="error-page">
+  <section class="glass-card">
+    <h1><%= title || 'Erro' %></h1>
+    <%- include('partials/flash', { flash }) %>
+    <a href="/" class="btn btn-primary">Ir para inicio</a>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

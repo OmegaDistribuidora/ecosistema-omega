@@ -1,0 +1,31 @@
+{
+  "name": "ecosistema-omega",
+  "version": "1.0.0",
+  "description": "Ecossistema Omega - Portal unificado com controle de acesso",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OmegaDistribuidora/ecosistema-omega.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/OmegaDistribuidora/ecosistema-omega/issues"
+  },
+  "homepage": "https://github.com/OmegaDistribuidora/ecosistema-omega#readme",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.6.2",
+    "connect-sqlite3": "^0.9.16",
+    "ejs": "^4.0.1",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0"
+  }
+}

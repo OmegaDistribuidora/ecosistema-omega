@@ -1,0 +1,188 @@
+﻿<%- include('partials/head', { title, theme: settings || theme }) %>
+
+<main class="admin-page">
+  <header class="page-header glass-card">
+    <div>
+      <h1>Painel Administrativo</h1>
+      <p>Gerencie usuarios, sistemas e a aparencia do Ecossistema Omega.</p>
+    </div>
+    <a class="btn btn-secondary" href="/dashboard">Voltar ao painel</a>
+  </header>
+
+  <%- include('partials/flash', { flash }) %>
+
+  <section class="grid-2">
+    <article class="glass-card">
+      <h2>Novo Usuario</h2>
+      <form method="post" action="/admin/users" class="form-stack">
+        <label>
+          Usuario
+          <input type="text" name="username" required />
+        </label>
+
+        <label>
+          Senha inicial
+          <input type="password" name="password" minlength="6" required />
+        </label>
+
+        <label class="check-row">
+          <input type="checkbox" name="is_admin" />
+          <span>Usuario administrador (acesso total)</span>
+        </label>
+
+        <fieldset>
+          <legend>Sistemas permitidos</legend>
+          <div class="check-grid">
+            <% systems.forEach((system) => { %>
+              <label class="check-row">
+                <input type="checkbox" name="system_ids" value="<%= system.id %>" />
+                <span><%= system.name %></span>
+              </label>
+            <% }) %>
+          </div>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary">Criar Usuario</button>
+      </form>
+    </article>
+
+    <article class="glass-card">
+      <h2>Novo Sistema</h2>
+      <form method="post" action="/admin/systems" class="form-stack">
+        <label>
+          Nome do sistema
+          <input type="text" name="name" required />
+        </label>
+
+        <label>
+          Link (URL)
+          <input type="url" name="url" placeholder="https://..." required />
+        </label>
+
+        <label>
+          Descricao
+          <input type="text" name="description" />
+        </label>
+
+        <fieldset>
+          <legend>Usuarios com acesso inicial</legend>
+          <div class="check-grid">
+            <% usersBasic.forEach((user) => { %>
+              <% if (!user.is_admin) { %>
+                <label class="check-row">
+                  <input type="checkbox" name="user_ids" value="<%= user.id %>" />
+                  <span><%= user.username %></span>
+                </label>
+              <% } %>
+            <% }) %>
+          </div>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary">Adicionar Sistema</button>
+      </form>
+    </article>
+  </section>
+
+  <section class="glass-card">
+    <h2>Permissoes por Usuario</h2>
+    <div class="users-grid">
+      <% users.forEach((user) => { %>
+        <article class="user-card">
+          <div class="user-header">
+            <h3><%= user.username %></h3>
+            <% if (user.is_admin) { %>
+              <span class="badge">Admin</span>
+            <% } %>
+          </div>
+
+          <% if (user.is_admin) { %>
+            <p class="muted">Administrador possui acesso a todos os sistemas ativos.</p>
+          <% } else { %>
+            <% const selectedIds = (user.system_ids || '').split(',').map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0); %>
+            <form method="post" action="/admin/users/<%= user.id %>/access" class="form-stack compact">
+              <div class="check-grid">
+                <% systems.forEach((system) => { %>
+                  <label class="check-row">
+                    <input
+                      type="checkbox"
+                      name="system_ids"
+                      value="<%= system.id %>"
+                      <%= selectedIds.includes(system.id) ? 'checked' : '' %>
+                    />
+                    <span><%= system.name %></span>
+                  </label>
+                <% }) %>
+              </div>
+              <button type="submit" class="btn btn-secondary">Salvar Permissoes</button>
+            </form>
+          <% } %>
+        </article>
+      <% }) %>
+    </div>
+  </section>
+
+  <section class="glass-card">
+    <h2>Tema e Marca</h2>
+    <form method="post" action="/admin/theme" class="form-stack">
+      <div class="grid-2">
+        <label>
+          Nome do app
+          <input type="text" name="app_name" value="<%= settings.app_name %>" />
+        </label>
+
+        <label>
+          Titulo principal
+          <input type="text" name="hero_title" value="<%= settings.hero_title %>" />
+        </label>
+      </div>
+
+      <label>
+        Subtitulo
+        <input type="text" name="hero_subtitle" value="<%= settings.hero_subtitle %>" />
+      </label>
+
+      <div class="grid-2">
+        <label>
+          URL do logo
+          <input type="url" name="logo_url" value="<%= settings.logo_url %>" placeholder="https://..." />
+        </label>
+
+        <label>
+          URL da imagem de fundo
+          <input type="url" name="background_url" value="<%= settings.background_url %>" placeholder="https://..." />
+        </label>
+      </div>
+
+      <div class="grid-4">
+        <label>
+          Cor primaria
+          <input type="color" name="primary_color" value="<%= settings.primary_color %>" />
+        </label>
+
+        <label>
+          Cor secundaria
+          <input type="color" name="secondary_color" value="<%= settings.secondary_color %>" />
+        </label>
+
+        <label>
+          Cor de destaque
+          <input type="color" name="accent_color" value="<%= settings.accent_color %>" />
+        </label>
+
+        <label>
+          Cor de superficie
+          <input type="color" name="surface_color" value="<%= settings.surface_color %>" />
+        </label>
+      </div>
+
+      <label>
+        Cor do texto
+        <input type="color" name="text_color" value="<%= settings.text_color %>" />
+      </label>
+
+      <button type="submit" class="btn btn-primary">Salvar Tema</button>
+    </form>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

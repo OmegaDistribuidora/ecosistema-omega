@@ -1,0 +1,31 @@
+﻿<%- include('partials/head', { title, theme }) %>
+
+<main class="auth-page" style="background-image: linear-gradient(160deg, rgba(2, 6, 23, .86), rgba(15, 23, 42, .76)), url('<%= (theme && theme.background_url) || '' %>');">
+  <section class="glass-card auth-card">
+    <div class="auth-brand">
+      <% if (theme && theme.logo_url) { %>
+        <img src="<%= theme.logo_url %>" alt="Logo" class="brand-logo" />
+      <% } %>
+      <h1><%= (theme && theme.app_name) || 'Ecossistema Omega' %></h1>
+      <p><%= (theme && theme.hero_subtitle) || 'Acesso centralizado aos sistemas da empresa.' %></p>
+    </div>
+
+    <%- include('partials/flash', { flash }) %>
+
+    <form method="post" action="/login" class="form-stack">
+      <label>
+        Usuario
+        <input type="text" name="username" autocomplete="username" required />
+      </label>
+
+      <label>
+        Senha
+        <input type="password" name="password" autocomplete="current-password" required />
+      </label>
+
+      <button type="submit" class="btn btn-primary">Entrar</button>
+    </form>
+  </section>
+</main>
+
+<%- include('partials/foot') %>
