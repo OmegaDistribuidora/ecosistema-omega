@@ -1,7 +1,7 @@
 ﻿<%- include('partials/head', { title, theme }) %>
 
-<main class="app-shell">
-  <aside class="sidebar glass-card">
+<main class="dashboard-page">
+  <header class="dashboard-top glass-card">
     <div class="brand-block">
       <% if (theme && theme.logo_url) { %>
         <img src="<%= theme.logo_url %>" alt="Logo" class="brand-logo" />
@@ -10,29 +10,7 @@
       <p><%= (theme && theme.hero_title) || 'Central de Sistemas' %></p>
     </div>
 
-    <%- include('partials/flash', { flash }) %>
-
-    <nav class="system-list" data-system-list>
-      <% if (!systems.length) { %>
-        <p class="muted">Sem sistemas liberados para seu usuario.</p>
-      <% } %>
-
-      <% systems.forEach((system) => { %>
-        <button
-          type="button"
-          class="btn btn-system"
-          data-system-button
-          data-id="<%= system.id %>"
-          data-name="<%= system.name %>"
-          data-url="<%= system.url %>"
-        >
-          <span><%= system.name %></span>
-          <small><%= system.description || 'Acessar sistema' %></small>
-        </button>
-      <% }) %>
-    </nav>
-
-    <div class="sidebar-actions">
+    <div class="dashboard-actions">
       <% if (currentUser && currentUser.is_admin) { %>
         <a class="btn btn-secondary" href="/admin">Painel Admin</a>
       <% } %>
@@ -41,32 +19,26 @@
         <button type="submit" class="btn btn-ghost">Sair</button>
       </form>
     </div>
-  </aside>
+  </header>
 
-  <section class="workspace glass-card">
-    <header class="workspace-header">
-      <h2 data-system-title>Selecione um sistema</h2>
-      <a data-external-link class="btn btn-secondary hidden" href="#" target="_blank" rel="noopener noreferrer">
-        Abrir em nova aba
-      </a>
-    </header>
+  <section class="selector-card glass-card">
+    <%- include('partials/flash', { flash }) %>
 
-    <div class="iframe-wrapper">
-      <div class="iframe-placeholder" data-placeholder>
-        Clique em um sistema para carregar sem trocar o link principal.
-      </div>
-      <iframe
-        title="Sistema selecionado"
-        data-system-frame
-        class="system-frame hidden"
-        loading="lazy"
-        referrerpolicy="strict-origin-when-cross-origin"
-      ></iframe>
+    <h2>Escolha um sistema</h2>
+    <p class="muted">Ao clicar, o sistema abre em uma nova aba.</p>
+
+    <div class="system-center-grid">
+      <% if (!systems.length) { %>
+        <p class="muted">Sem sistemas liberados para seu usuario.</p>
+      <% } %>
+
+      <% systems.forEach((system) => { %>
+        <a class="system-link" href="<%= system.url %>" target="_blank" rel="noopener noreferrer">
+          <span><%= system.name %></span>
+          <small><%= system.description || 'Acessar sistema' %></small>
+        </a>
+      <% }) %>
     </div>
-
-    <p class="muted small">
-      Alguns sistemas externos podem bloquear incorporacao por seguranca (X-Frame-Options/CSP). Nesse caso, use "Abrir em nova aba".
-    </p>
   </section>
 </main>
 

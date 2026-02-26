@@ -1,46 +1,37 @@
 ﻿(function () {
-  const buttons = Array.from(document.querySelectorAll('[data-system-button]'));
-  const frame = document.querySelector('[data-system-frame]');
-  const title = document.querySelector('[data-system-title]');
-  const placeholder = document.querySelector('[data-placeholder]');
-  const externalLink = document.querySelector('[data-external-link]');
-
-  if (!buttons.length || !frame || !title || !placeholder || !externalLink) {
+  const dropdown = document.querySelector('[data-admin-dropdown]');
+  if (!dropdown) {
     return;
   }
 
-  function activateButton(target) {
-    for (const button of buttons) {
-      button.classList.toggle('active', button === target);
+  const tabButtons = Array.from(dropdown.querySelectorAll('[data-admin-tab-button]'));
+  const tabPanels = Array.from(dropdown.querySelectorAll('[data-admin-tab-panel]'));
+
+  if (!tabButtons.length || !tabPanels.length) {
+    return;
+  }
+
+  function setActiveTab(tab) {
+    for (const button of tabButtons) {
+      button.classList.toggle('is-active', button.dataset.tab === tab);
+    }
+
+    for (const panel of tabPanels) {
+      panel.classList.toggle('hidden', panel.dataset.adminTabPanel !== tab);
     }
   }
 
-  function openSystem(button) {
-    const url = button.dataset.url;
-    const name = button.dataset.name;
-    if (!url) {
-      return;
+  for (const button of tabButtons) {
+    button.addEventListener('click', () => {
+      setActiveTab(button.dataset.tab);
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    if (dropdown.open && !dropdown.contains(event.target)) {
+      dropdown.open = false;
     }
+  });
 
-    activateButton(button);
-    frame.src = url;
-    frame.classList.remove('hidden');
-    placeholder.classList.add('hidden');
-    title.textContent = name || 'Sistema';
-
-    externalLink.href = url;
-    externalLink.classList.remove('hidden');
-
-    localStorage.setItem('ecosistema:lastSystem', button.dataset.id || '');
-  }
-
-  for (const button of buttons) {
-    button.addEventListener('click', () => openSystem(button));
-  }
-
-  const lastId = localStorage.getItem('ecosistema:lastSystem');
-  const preferred = buttons.find((button) => button.dataset.id === lastId) || buttons[0];
-  if (preferred) {
-    openSystem(preferred);
-  }
+  setActiveTab(tabButtons[0].dataset.tab);
 })();
