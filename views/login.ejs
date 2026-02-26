@@ -4,9 +4,10 @@
   <section class="glass-card auth-card omega-login-card">
     <div class="auth-brand">
       <img
-        src="<%= (theme && theme.logo_url) || '/public/assets/omega-logo.svg' %>"
+        src="<%= (theme && theme.logo_url) || '/images/logo.png' %>"
         alt="Omega Distribuidora"
         class="omega-logo"
+        onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
       />
       <h1><%= (theme && theme.app_name) || 'Ecossistema Omega' %></h1>
       <p><%= (theme && theme.hero_subtitle) || 'Acesso centralizado aos sistemas da empresa.' %></p>

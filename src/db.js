@@ -10,7 +10,8 @@ const defaultSettings = {
   app_name: 'Ecossistema Omega',
   hero_title: 'Central de Sistemas',
   hero_subtitle: 'Acesse todos os sistemas em um unico lugar.',
-  logo_url: '',
+  logo_url: '/images/logo.png',
+  mascot_url: '/images/aurora.png',
   background_url: '',
   primary_color: '#03a9f4',
   secondary_color: '#0d1b2a',
@@ -225,10 +226,15 @@ async function initializeDatabase() {
 }
 
 async function getSettings() {
+  const protectedDefaults = new Set(['logo_url', 'mascot_url']);
+
   if (isPostgres) {
     const result = await pgPool.query('SELECT key, value FROM settings');
     const settings = { ...defaultSettings };
     for (const row of result.rows) {
+      if (protectedDefaults.has(row.key) && !String(row.value || '').trim()) {
+        continue;
+      }
       settings[row.key] = row.value;
     }
     return settings;
@@ -237,6 +243,9 @@ async function getSettings() {
   const rows = sqliteDb.prepare('SELECT key, value FROM settings').all();
   const settings = { ...defaultSettings };
   for (const row of rows) {
+    if (protectedDefaults.has(row.key) && !String(row.value || '').trim()) {
+      continue;
+    }
     settings[row.key] = row.value;
   }
   return settings;

@@ -4,9 +4,10 @@
   <header class="dashboard-top glass-card omega-header">
     <div class="brand-block brand-block-omega">
       <img
-        src="<%= (theme && theme.logo_url) || '/public/assets/omega-logo.svg' %>"
+        src="<%= (theme && theme.logo_url) || '/images/logo.png' %>"
         alt="Omega Distribuidora"
         class="omega-logo"
+        onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
       />
       <h1><%= (theme && theme.app_name) || 'Ecossistema Omega' %></h1>
       <p><%= (theme && theme.hero_title) || 'Central de Sistemas da Omega Distribuidora' %></p>
@@ -31,7 +32,12 @@
         <h2>Sistemas da Omega</h2>
         <p class="muted">Lista vertical com preview ao passar o mouse. Clique para abrir em nova aba.</p>
       </div>
-      <img src="/public/assets/omega-boneca.svg" alt="Personagem Omega" class="omega-mascot" />
+      <img
+        src="<%= (theme && theme.mascot_url) || '/images/aurora.png' %>"
+        alt="Personagem Omega"
+        class="omega-mascot"
+        onerror="this.onerror=null;this.src='/public/assets/omega-boneca.svg';"
+      />
     </div>
 
     <div class="systems-browser">

@@ -4,9 +4,10 @@
   <header class="page-header glass-card omega-header">
     <div class="admin-header-left">
       <img
-        src="<%= (theme && theme.logo_url) || '/public/assets/omega-logo.svg' %>"
+        src="<%= (theme && theme.logo_url) || '/images/logo.png' %>"
         alt="Omega Distribuidora"
         class="omega-logo"
+        onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
       />
       <div>
         <h1>Painel Administrativo</h1>

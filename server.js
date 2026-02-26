@@ -1,4 +1,5 @@
-﻿const path = require('path');
+﻿const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
@@ -24,6 +25,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const SESSION_SECRET = process.env.SESSION_SECRET || 'change-this-in-production';
 const dataDir = path.join(__dirname, 'data');
+const imagesDir = process.env.IMAGES_DIR || '/images';
 
 if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
@@ -35,6 +37,10 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use('/public', express.static(path.join(__dirname, 'public')));
+if (fs.existsSync(imagesDir)) {
+  app.use('/images', express.static(imagesDir));
+}
+app.use('/images', express.static(path.join(__dirname, 'public', 'assets')));
 
 app.use(
   session({
@@ -360,3 +366,4 @@ start().catch((error) => {
   console.error('Falha ao iniciar aplicacao:', error);
   process.exit(1);
 });
+

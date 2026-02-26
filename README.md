@@ -35,6 +35,7 @@ A aplicacao abre em `http://localhost:3000`.
 - `PORT`: porta do servidor (Railway define automaticamente)
 - `SESSION_SECRET`: segredo da sessao (obrigatorio em producao)
 - `DATABASE_URL`: conexao Postgres (quando presente, app usa Postgres)
+- `IMAGES_DIR`: caminho do volume de imagens (padrao `/images`)
 - `NODE_ENV=production`
 
 ## Deploy no Railway
@@ -46,7 +47,17 @@ A aplicacao abre em `http://localhost:3000`.
 5. Configure tambem:
    - `SESSION_SECRET` com um valor forte.
    - `NODE_ENV=production`
+   - `IMAGES_DIR=/images` (se estiver usando volume)
 6. Railway detecta Node automaticamente e executa `npm start`.
+
+## Imagens no volume
+
+Se voce criou um volume em `/images`, salve os arquivos com estes nomes:
+
+- `/images/logo.png`
+- `/images/aurora.png`
+
+O sistema tenta usar esses arquivos automaticamente e aplica fallback local se nao existirem.
 
 ## Observacao importante sobre "manter o link"
 
