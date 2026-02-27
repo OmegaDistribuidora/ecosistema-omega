@@ -217,6 +217,18 @@
             <strong><%= asset.name %></strong>
             <small><%= asset.sizeKb %> KB</small>
             <input type="text" readonly value="<%= asset.url %>" onclick="this.select()" />
+            <div class="asset-actions">
+              <form method="post" action="/admin/assets/use">
+                <input type="hidden" name="target" value="logo" />
+                <input type="hidden" name="image_url" value="<%= asset.url %>" />
+                <button type="submit" class="btn btn-secondary">Usar como Logo</button>
+              </form>
+              <form method="post" action="/admin/assets/use">
+                <input type="hidden" name="target" value="aurora" />
+                <input type="hidden" name="image_url" value="<%= asset.url %>" />
+                <button type="submit" class="btn btn-secondary">Usar como Aurora</button>
+              </form>
+            </div>
           </div>
         </article>
       <% }) %>

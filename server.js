@@ -74,6 +74,62 @@ function listUploadedImages() {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
+function getImageFileNameFromUrl(url) {
+  const value = String(url || '').trim();
+  if (!value.startsWith('/images/')) {
+    return null;
+  }
+  const filename = decodeURIComponent(value.slice('/images/'.length));
+  if (!filename || filename.includes('/') || filename.includes('\\')) {
+    return null;
+  }
+  return filename;
+}
+
+function imageUrlExists(url) {
+  const filename = getImageFileNameFromUrl(url);
+  if (!filename) {
+    return false;
+  }
+  return fs.existsSync(path.join(imagesDir, filename));
+}
+
+function findLatestImageByPrefix(prefix) {
+  const normalizedPrefix = `${String(prefix || '').toLowerCase()}`;
+  const matches = listUploadedImages().filter((asset) => {
+    const lower = asset.name.toLowerCase();
+    return lower.startsWith(`${normalizedPrefix}-`) || lower.startsWith(`${normalizedPrefix}.`);
+  });
+  return matches.length ? matches[0] : null;
+}
+
+async function resolveThemeAssets(baseTheme) {
+  const theme = { ...(baseTheme || {}) };
+  const patch = {};
+
+  if (!imageUrlExists(theme.logo_url)) {
+    const latestLogo = findLatestImageByPrefix('logo');
+    if (latestLogo) {
+      theme.logo_url = latestLogo.url;
+      patch.logo_url = latestLogo.url;
+    }
+  }
+
+  if (!imageUrlExists(theme.mascot_url)) {
+    const latestAurora = findLatestImageByPrefix('aurora');
+    if (latestAurora) {
+      theme.mascot_url = latestAurora.url;
+      patch.mascot_url = latestAurora.url;
+    }
+  }
+
+  if (Object.keys(patch).length) {
+    await updateSettings(patch);
+  }
+
+  return theme;
+}
+
 function buildUploadFileName(target, customName, originalName) {
   const originalExt = path.extname(originalName || '').toLowerCase();
   const extension = allowedImageExts.has(originalExt) ? originalExt : '';
@@ -177,7 +233,7 @@ app.use(async (req, res, next) => {
 
     if (!userId) {
       res.locals.currentUser = null;
-      res.locals.theme = await getSettings();
+      res.locals.theme = await resolveThemeAssets(await getSettings());
       return next();
     }
 
@@ -190,7 +246,7 @@ app.use(async (req, res, next) => {
     }
 
     res.locals.currentUser = user;
-    res.locals.theme = await getSettings();
+    res.locals.theme = await resolveThemeAssets(await getSettings());
     next();
   } catch (error) {
     next(error);
@@ -301,7 +357,7 @@ app.get('/admin', requireAuth, requireAdmin, async (req, res, next) => {
       users,
       usersBasic: await listUsersBasic(),
       systems,
-      settings: await getSettings(),
+      settings: await resolveThemeAssets(await getSettings()),
       uploadedImages: listUploadedImages(),
       imagesDir
     });
@@ -458,6 +514,14 @@ app.post('/admin/assets/upload', requireAuth, requireAdmin, (req, res, next) => 
         await updateSettings({ logo_url: fileUrl });
       } else if (target === 'aurora') {
         await updateSettings({ mascot_url: fileUrl });
+      } else {
+        const normalizedCustom = sanitizeBaseName(req.body.custom_name || '');
+        if (normalizedCustom === 'logo') {
+          await updateSettings({ logo_url: fileUrl });
+        }
+        if (normalizedCustom === 'aurora') {
+          await updateSettings({ mascot_url: fileUrl });
+        }
       }
 
       setFlash(req, 'success', `Imagem enviada com sucesso: ${req.file.filename}`);
@@ -466,6 +530,34 @@ app.post('/admin/assets/upload', requireAuth, requireAdmin, (req, res, next) => 
       next(routeError);
     }
   });
+});
+
+app.post('/admin/assets/use', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const target = String(req.body.target || '').toLowerCase();
+    const imageUrl = String(req.body.image_url || '').trim();
+
+    if (!['logo', 'aurora'].includes(target)) {
+      setFlash(req, 'error', 'Destino de imagem invalido.');
+      return res.redirect('/admin');
+    }
+
+    if (!imageUrlExists(imageUrl)) {
+      setFlash(req, 'error', 'Imagem nao encontrada no volume.');
+      return res.redirect('/admin');
+    }
+
+    if (target === 'logo') {
+      await updateSettings({ logo_url: imageUrl });
+    } else {
+      await updateSettings({ mascot_url: imageUrl });
+    }
+
+    setFlash(req, 'success', `Imagem aplicada como ${target}.`);
+    res.redirect('/admin');
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use((req, res) => {

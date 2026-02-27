@@ -545,6 +545,15 @@ fieldset {
   color: var(--omega-muted);
 }
 
+.asset-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.asset-actions form {
+  margin: 0;
+}
+
 .check-grid {
   display: grid;
   gap: 8px;
