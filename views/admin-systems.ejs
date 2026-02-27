@@ -1,0 +1,168 @@
+﻿<%- include('partials/head', { title, theme }) %>
+
+<main class="admin-page omega-page">
+  <header class="page-header glass-card omega-header">
+    <div class="admin-header-left">
+      <img src="<%= fixedLogoUrl %>" alt="Omega Distribuidora" class="omega-logo" onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';" />
+      <div>
+        <h1>Gerenciar Sistemas</h1>
+        <p>Criar e editar sistemas no mesmo painel, com preview local.</p>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a class="btn btn-secondary" href="/admin">Menu Admin</a>
+      <a class="btn btn-secondary" href="/admin/users">Ir para Usuarios</a>
+    </div>
+  </header>
+
+  <%- include('partials/flash', { flash }) %>
+
+  <section class="split-grid">
+    <article class="glass-card admin-section">
+      <h2 class="section-title">Novo Sistema</h2>
+      <form method="post" action="/admin/systems" class="form-stack compact">
+        <label>
+          Nome do sistema
+          <input type="text" name="name" required />
+        </label>
+
+        <label>
+          Link (URL)
+          <input type="url" name="url" placeholder="https://..." required />
+        </label>
+
+        <label>
+          Descricao
+          <input type="text" name="description" />
+        </label>
+
+        <label>
+          Imagem de preview
+          <select name="preview_image_url" class="omega-select">
+            <option value="">Sem imagem</option>
+            <% (uploadedImages || []).forEach((asset) => { %>
+              <option value="<%= asset.url %>"><%= asset.name %></option>
+            <% }) %>
+          </select>
+        </label>
+
+        <fieldset>
+          <legend>Usuarios com acesso inicial</legend>
+          <div class="check-grid">
+            <% usersBasic.forEach((user) => { %>
+              <% if (!user.is_admin) { %>
+                <label class="check-row">
+                  <input type="checkbox" name="user_ids" value="<%= user.id %>" />
+                  <span><%= user.username %></span>
+                </label>
+              <% } %>
+            <% }) %>
+          </div>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary">Adicionar Sistema</button>
+      </form>
+
+      <div class="upload-box">
+        <h3>Upload de imagens para preview</h3>
+        <form method="post" action="/admin/assets/upload" enctype="multipart/form-data" class="form-stack compact">
+          <label>
+            Nome do arquivo (opcional)
+            <input type="text" name="custom_name" placeholder="preview-financeiro" />
+          </label>
+          <label>
+            Arquivo de imagem
+            <input type="file" name="image_file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg" required />
+          </label>
+          <button type="submit" class="btn btn-primary">Enviar Imagem</button>
+          <p class="muted small">Pasta de destino: <code><%= imagesDir %></code></p>
+        </form>
+      </div>
+    </article>
+
+    <article class="glass-card admin-section">
+      <h2 class="section-title">Sistemas Cadastrados</h2>
+
+      <div class="compact-list">
+        <% systems.forEach((system) => { %>
+          <% const allowedUsers = users
+            .filter((u) => {
+              const ids = (u.system_ids || '').split(',').map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+              return ids.includes(system.id);
+            })
+            .map((u) => u.username); %>
+          <div class="compact-row">
+            <div class="compact-main">
+              <strong><%= system.name %></strong>
+              <span class="muted small"><%= system.url %></span>
+              <span class="muted small">Preview: <%= system.preview_image_url || 'sem imagem' %></span>
+              <span class="muted small">Usuarios: <%= allowedUsers.join(', ') || 'somente admins' %></span>
+            </div>
+            <button
+              type="button"
+              class="icon-edit-btn"
+              data-system-edit
+              data-system-id="<%= system.id %>"
+              data-name="<%= system.name %>"
+              data-url="<%= system.url %>"
+              data-description="<%= system.description || '' %>"
+              data-preview-image-url="<%= system.preview_image_url || '' %>"
+              title="Editar sistema"
+            >
+              &#9998;
+            </button>
+          </div>
+        <% }) %>
+      </div>
+
+      <form method="post" action="/admin/systems/0" class="form-stack compact hidden" data-system-edit-form>
+        <h3 data-system-edit-title>Editar Sistema</h3>
+
+        <label>
+          Nome
+          <input type="text" name="name" data-system-field="name" required />
+        </label>
+
+        <label>
+          Link
+          <input type="url" name="url" data-system-field="url" required />
+        </label>
+
+        <label>
+          Descricao
+          <input type="text" name="description" data-system-field="description" />
+        </label>
+
+        <label>
+          Imagem de preview
+          <select name="preview_image_url" class="omega-select" data-system-field="preview_image_url">
+            <option value="">Sem imagem</option>
+            <% (uploadedImages || []).forEach((asset) => { %>
+              <option value="<%= asset.url %>"><%= asset.name %></option>
+            <% }) %>
+          </select>
+        </label>
+
+        <div class="form-actions-inline">
+          <button type="submit" class="btn btn-primary">Salvar Alteracoes</button>
+          <button type="button" class="btn btn-ghost" data-system-edit-cancel>Cancelar</button>
+        </div>
+      </form>
+
+      <div class="assets-grid">
+        <% (uploadedImages || []).forEach((asset) => { %>
+          <article class="asset-card compact-asset">
+            <img src="<%= asset.url %>" alt="<%= asset.name %>" loading="lazy" />
+            <div class="asset-meta">
+              <strong><%= asset.name %></strong>
+              <input type="text" readonly value="<%= asset.url %>" onclick="this.select()" />
+            </div>
+          </article>
+        <% }) %>
+      </div>
+    </article>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

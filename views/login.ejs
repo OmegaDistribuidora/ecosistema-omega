@@ -1,33 +1,55 @@
 ﻿<%- include('partials/head', { title, theme }) %>
 
 <main class="auth-page omega-page" style="background-image: linear-gradient(160deg, rgba(4, 10, 30, .88), rgba(5, 16, 47, .82)), url('<%= (theme && theme.background_url) || '' %>');">
-  <section class="glass-card auth-card omega-login-card">
-    <div class="auth-brand">
-      <img
-        src="<%= (theme && theme.logo_url) || '/images/logo.png' %>"
-        alt="Omega Distribuidora"
-        class="omega-logo"
-        onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
-      />
-      <h1><%= (theme && theme.app_name) || 'Ecossistema Omega' %></h1>
-      <p><%= (theme && theme.hero_subtitle) || 'Acesso centralizado aos sistemas da empresa.' %></p>
+  <section class="glass-card auth-card omega-login-card login-shell">
+    <div class="login-brand-panel">
+      <div class="auth-brand">
+        <div class="logo-wrap">
+          <img
+            src="<%= fixedLogoUrl %>"
+            alt="Omega Distribuidora"
+            class="omega-logo"
+            onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
+          />
+        </div>
+        <h1><%= (theme && theme.app_name) || 'Ecossistema Omega' %></h1>
+        <p>Ambiente unificado da Ômega Distribuidora para acesso rápido e seguro aos módulos internos.</p>
+      </div>
+
+      <div class="login-identity-foot">
+        <span class="dot-live"></span>
+        <span>Plataforma corporativa</span>
+      </div>
     </div>
 
-    <%- include('partials/flash', { flash }) %>
+    <div class="login-form-panel">
+      <h2>Acessar</h2>
+      <p class="muted">Entre com seu usuário e senha.</p>
 
-    <form method="post" action="/login" class="form-stack">
-      <label>
-        Usuario
-        <input type="text" name="username" autocomplete="username" required />
-      </label>
+      <%- include('partials/flash', { flash }) %>
 
-      <label>
-        Senha
-        <input type="password" name="password" autocomplete="current-password" required />
-      </label>
+      <form method="post" action="/login" class="form-stack" data-login-form>
+        <label>
+          Usuario
+          <input type="text" name="username" autocomplete="username" required />
+        </label>
 
-      <button type="submit" class="btn btn-primary">Entrar</button>
-    </form>
+        <label>
+          Senha
+          <div class="input-with-action">
+            <input type="password" name="password" autocomplete="current-password" required data-password-input />
+            <button type="button" class="toggle-pass-btn" data-toggle-password aria-label="Mostrar senha">Mostrar</button>
+          </div>
+        </label>
+
+        <p class="caps-warning hidden" data-caps-warning>Caps Lock parece estar ativo.</p>
+
+        <button type="submit" class="btn btn-primary" data-login-submit>
+          <span data-submit-label>Entrar</span>
+          <span class="btn-spinner hidden" data-submit-spinner></span>
+        </button>
+      </form>
+    </div>
   </section>
 </main>
 

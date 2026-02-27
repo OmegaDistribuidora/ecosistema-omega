@@ -1,0 +1,122 @@
+﻿<%- include('partials/head', { title, theme }) %>
+
+<main class="admin-page omega-page">
+  <header class="page-header glass-card omega-header">
+    <div class="admin-header-left">
+      <img src="<%= fixedLogoUrl %>" alt="Omega Distribuidora" class="omega-logo" onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';" />
+      <div>
+        <h1>Gerenciar Usuarios</h1>
+        <p>Criar e editar usuarios no mesmo painel.</p>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a class="btn btn-secondary" href="/admin">Menu Admin</a>
+      <a class="btn btn-secondary" href="/admin/systems">Ir para Sistemas</a>
+    </div>
+  </header>
+
+  <%- include('partials/flash', { flash }) %>
+
+  <section class="split-grid">
+    <article class="glass-card admin-section">
+      <h2 class="section-title">Novo Usuario</h2>
+      <form method="post" action="/admin/users" class="form-stack compact">
+        <label>
+          Usuario
+          <input type="text" name="username" required />
+        </label>
+
+        <label>
+          Senha inicial
+          <input type="password" name="password" minlength="6" required />
+        </label>
+
+        <label class="check-row">
+          <input type="checkbox" name="is_admin" />
+          <span>Administrador</span>
+        </label>
+
+        <fieldset>
+          <legend>Modulos com acesso</legend>
+          <div class="check-grid">
+            <% systems.forEach((system) => { %>
+              <label class="check-row">
+                <input type="checkbox" name="system_ids" value="<%= system.id %>" />
+                <span><%= system.name %></span>
+              </label>
+            <% }) %>
+          </div>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary">Criar Usuario</button>
+      </form>
+    </article>
+
+    <article class="glass-card admin-section">
+      <h2 class="section-title">Usuarios Cadastrados</h2>
+
+      <div class="compact-list">
+        <% users.forEach((user) => { %>
+          <div class="compact-row">
+            <div class="compact-main">
+              <strong><%= user.username %></strong>
+              <span class="muted small"><%= user.is_admin ? 'Administrador' : 'Usuario' %></span>
+              <span class="muted small">Modulos: <%= user.system_names || 'Nenhum' %></span>
+            </div>
+            <button
+              type="button"
+              class="icon-edit-btn"
+              data-user-edit
+              data-user-id="<%= user.id %>"
+              data-username="<%= user.username %>"
+              data-is-admin="<%= user.is_admin ? '1' : '0' %>"
+              data-system-ids="<%= user.system_ids || '' %>"
+              title="Editar usuario"
+            >
+              &#9998;
+            </button>
+          </div>
+        <% }) %>
+      </div>
+
+      <form method="post" action="/admin/users/0" class="form-stack compact hidden" data-user-edit-form>
+        <h3 data-user-edit-title>Editar Usuario</h3>
+
+        <label>
+          Nome de usuario
+          <input type="text" name="username" data-user-field="username" required />
+        </label>
+
+        <label>
+          Nova senha (opcional)
+          <input type="password" name="password" minlength="6" placeholder="deixe vazio para manter" />
+        </label>
+
+        <label class="check-row">
+          <input type="checkbox" name="is_admin" data-user-field="is_admin" />
+          <span>Administrador</span>
+        </label>
+
+        <fieldset>
+          <legend>Modulos com acesso</legend>
+          <div class="check-grid">
+            <% systems.forEach((system) => { %>
+              <label class="check-row">
+                <input type="checkbox" name="system_ids" value="<%= system.id %>" data-user-system-option />
+                <span><%= system.name %></span>
+              </label>
+            <% }) %>
+          </div>
+        </fieldset>
+
+        <div class="form-actions-inline">
+          <button type="submit" class="btn btn-primary">Salvar Alteracoes</button>
+          <button type="button" class="btn btn-ghost" data-user-edit-cancel>Cancelar</button>
+        </div>
+      </form>
+    </article>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

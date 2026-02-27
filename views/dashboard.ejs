@@ -1,16 +1,37 @@
 ﻿<%- include('partials/head', { title, theme }) %>
 
+<%
+  function systemMeta(system) {
+    const name = String((system && system.name) || '').toLowerCase();
+    if (name.includes('ponto')) {
+      return { icon: '⏱', tone: 'tone-time' };
+    }
+    if (name.includes('despesa')) {
+      return { icon: '💰', tone: 'tone-money' };
+    }
+    if (name.includes('form')) {
+      return { icon: '🧾', tone: 'tone-form' };
+    }
+    if (name.includes('lancamento')) {
+      return { icon: '📊', tone: 'tone-launch' };
+    }
+    return { icon: '🧩', tone: 'tone-default' };
+  }
+%>
+
 <main class="dashboard-page omega-page">
   <header class="dashboard-top glass-card omega-header">
-    <div class="brand-block brand-block-omega">
+    <div class="brand-inline">
       <img
-        src="<%= (theme && theme.logo_url) || '/images/logo.png' %>"
+        src="<%= fixedLogoUrl %>"
         alt="Omega Distribuidora"
         class="omega-logo"
         onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
       />
-      <h1><%= (theme && theme.app_name) || 'Ecossistema Omega' %></h1>
-      <p><%= (theme && theme.hero_title) || 'Central de Sistemas da Omega Distribuidora' %></p>
+      <div class="brand-text">
+        <h1><%= (theme && theme.app_name) || 'Ecossistema Omega' %></h1>
+        <p>Central de Sistema da Ômega Distribuidora</p>
+      </div>
     </div>
 
     <div class="dashboard-actions">
@@ -25,58 +46,103 @@
   </header>
 
   <section class="selector-card glass-card omega-selector">
-    <%- include('partials/flash', { flash }) %>
+    <div class="welcome-banner">
+      <div>
+        <strong>Bem-vindo de volta, <%= (currentUser && currentUser.username) || 'usuário' %>.</strong>
+        <span>Hoje é <%= todayLabel %>.</span>
+      </div>
+    </div>
 
     <div class="selector-intro">
       <div>
         <h2>Sistemas da Omega</h2>
-        <p class="muted">Lista vertical com preview ao passar o mouse. Clique para abrir em nova aba.</p>
+        <p class="muted">Selecione um módulo para acessar.</p>
       </div>
       <img
-        src="<%= (theme && theme.mascot_url) || '/images/aurora.png' %>"
+        src="<%= fixedMascotUrl %>"
         alt="Personagem Omega"
         class="omega-mascot"
         onerror="this.onerror=null;this.src='/public/assets/omega-boneca.svg';"
       />
     </div>
 
+    <div class="mobile-system-picker">
+      <label for="mobile-system-select" class="small muted">Módulo</label>
+      <div class="mobile-picker-row">
+        <select id="mobile-system-select" class="omega-select" data-mobile-system-select>
+          <option value="">Selecione um módulo</option>
+          <% systems.forEach((system) => { %>
+            <option
+              value="<%= system.id %>"
+              data-url="<%= system.url %>"
+              data-name="<%= system.name %>"
+              data-preview-image="<%= system.preview_image_url || '/public/assets/omega-logo.svg' %>"
+            >
+              <%= system.name %>
+            </option>
+          <% }) %>
+        </select>
+        <a href="#" class="btn btn-primary disabled" data-mobile-open-link target="_blank" rel="noopener noreferrer">Abrir</a>
+      </div>
+    </div>
+
     <div class="systems-browser">
       <nav class="system-vertical-list" data-preview-list>
         <% if (!systems.length) { %>
-          <p class="muted">Sem sistemas liberados para seu usuario.</p>
+          <p class="muted">Sem sistemas liberados para seu usuário.</p>
         <% } %>
 
         <% systems.forEach((system) => { %>
+          <% const meta = systemMeta(system); %>
+          <% const status = (systemStatuses && systemStatuses[system.id]) || { online: false, statusCode: null }; %>
           <a
-            class="system-item"
+            class="system-item <%= meta.tone %>"
             href="<%= system.url %>"
             target="_blank"
             rel="noopener noreferrer"
             data-preview-link
-            data-preview-url="<%= system.url %>"
-            data-preview-title="<%= system.name %>"
+            data-system-id="<%= system.id %>"
+            data-system-name="<%= system.name %>"
+            data-system-url="<%= system.url %>"
+            data-preview-image="<%= system.preview_image_url || '/public/assets/omega-logo.svg' %>"
           >
-            <span><%= system.name %></span>
+            <div class="system-item-top">
+              <span class="system-icon"><%= meta.icon %></span>
+              <span class="system-title"><%= system.name %></span>
+              <span class="status-badge <%= status.online ? 'is-online' : 'is-offline' %>">
+                <%= status.online ? 'Online' : 'Offline' %>
+              </span>
+            </div>
             <small><%= system.description || 'Acessar sistema' %></small>
           </a>
         <% }) %>
       </nav>
 
       <aside class="preview-panel">
-        <h3 data-preview-title>Passe o mouse sobre um sistema</h3>
+        <div class="preview-panel-header">
+          <div>
+            <p class="small muted">Preview</p>
+            <h3 data-preview-title>Nenhum módulo selecionado</h3>
+          </div>
+          <a href="#" class="btn btn-primary preview-open-btn hidden" data-preview-open target="_blank" rel="noopener noreferrer">Abrir em nova aba</a>
+        </div>
+
+        <div class="preview-urlbar">
+          <span class="url-label">URL</span>
+          <span class="url-value" data-preview-url>Selecione um módulo para visualizar a prévia.</span>
+        </div>
+
         <div class="preview-frame-wrap">
           <div class="preview-placeholder" data-preview-placeholder>
-            O preview sera exibido aqui.
+            Escolha um módulo na lista para ver a miniatura de acesso.
           </div>
-          <iframe
-            class="preview-frame hidden"
-            title="Preview do sistema"
-            data-preview-frame
+          <img
+            class="preview-image hidden"
+            alt="Miniatura do sistema"
+            data-preview-target
             loading="lazy"
-            referrerpolicy="strict-origin-when-cross-origin"
-          ></iframe>
+          />
         </div>
-        <p class="muted small">Alguns sistemas podem bloquear incorporacao por seguranca (X-Frame-Options/CSP).</p>
       </aside>
     </div>
   </section>

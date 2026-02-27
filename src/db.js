@@ -8,7 +8,7 @@ const isPostgres = Boolean(process.env.DATABASE_URL);
 
 const defaultSettings = {
   app_name: 'Ecossistema Omega',
-  hero_title: 'Central de Sistemas',
+  hero_title: 'Central de Sistema da Omega Distribuidora',
   hero_subtitle: 'Acesse todos os sistemas em um unico lugar.',
   logo_url: '/images/logo.png',
   mascot_url: '/images/aurora.png',
@@ -24,22 +24,26 @@ const defaultSystems = [
   {
     name: 'Controle de Ponto',
     url: 'https://controle-ponto.up.railway.app/',
-    description: 'Registro de ponto e jornada'
+    description: 'Registro de ponto e jornada',
+    preview_image_url: null
   },
   {
     name: 'Lancamento Omega',
     url: 'https://lancamento-omega.up.railway.app/',
-    description: 'Lancamentos operacionais'
+    description: 'Lancamentos operacionais',
+    preview_image_url: null
   },
   {
     name: 'Despesas Omega',
     url: 'https://despesas-omega.up.railway.app/',
-    description: 'Controle de despesas'
+    description: 'Controle de despesas',
+    preview_image_url: null
   },
   {
     name: 'Forms Omega',
     url: 'https://forms-omega.up.railway.app/admin/login/',
-    description: 'Formularios e administracao'
+    description: 'Formularios e administracao',
+    preview_image_url: null
   }
 ];
 
@@ -85,6 +89,7 @@ async function initializePostgres() {
       name TEXT NOT NULL,
       url TEXT NOT NULL,
       description TEXT,
+      preview_image_url TEXT,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -100,6 +105,10 @@ async function initializePostgres() {
       value TEXT NOT NULL
     );
   `);
+
+  await pgPool.query(
+    'ALTER TABLE systems ADD COLUMN IF NOT EXISTS preview_image_url TEXT'
+  );
 
   for (const [key, value] of Object.entries(defaultSettings)) {
     await pgPool.query(
@@ -121,8 +130,9 @@ async function initializePostgres() {
   if (systemCountResult.rows[0].count === 0) {
     for (const system of defaultSystems) {
       await pgPool.query(
-        'INSERT INTO systems (name, url, description, is_active) VALUES ($1, $2, $3, TRUE)',
-        [system.name, system.url, system.description]
+        `INSERT INTO systems (name, url, description, preview_image_url, is_active)
+         VALUES ($1, $2, $3, $4, TRUE)`,
+        [system.name, system.url, system.description, system.preview_image_url || null]
       );
     }
   }
@@ -164,6 +174,7 @@ function initializeSqlite() {
       name TEXT NOT NULL,
       url TEXT NOT NULL,
       description TEXT,
+      preview_image_url TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -182,6 +193,12 @@ function initializeSqlite() {
     );
   `);
 
+  const systemColumns = sqliteDb.prepare('PRAGMA table_info(systems)').all();
+  const hasPreviewColumn = systemColumns.some((column) => column.name === 'preview_image_url');
+  if (!hasPreviewColumn) {
+    sqliteDb.exec('ALTER TABLE systems ADD COLUMN preview_image_url TEXT');
+  }
+
   const insertSetting = sqliteDb.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(defaultSettings)) {
     insertSetting.run(key, value);
@@ -198,10 +215,11 @@ function initializeSqlite() {
   const systemCount = sqliteDb.prepare('SELECT COUNT(*) AS count FROM systems').get().count;
   if (systemCount === 0) {
     const insertSystem = sqliteDb.prepare(
-      'INSERT INTO systems (name, url, description, is_active) VALUES (?, ?, ?, 1)'
+      `INSERT INTO systems (name, url, description, preview_image_url, is_active)
+       VALUES (?, ?, ?, ?, 1)`
     );
     for (const system of defaultSystems) {
-      insertSystem.run(system.name, system.url, system.description);
+      insertSystem.run(system.name, system.url, system.description, system.preview_image_url || null);
     }
   }
 
@@ -413,6 +431,90 @@ async function createUser({ username, password, isAdmin, systemIds }) {
   return tx({ username, password, isAdmin, systemIds });
 }
 
+async function updateUser({ userId, username, password, isAdmin, systemIds }) {
+  const ids = normalizeIdArray(systemIds);
+
+  if (isPostgres) {
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      const currentResult = await client.query('SELECT id FROM users WHERE id = $1 LIMIT 1', [userId]);
+      if (!currentResult.rows.length) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+
+      await client.query('UPDATE users SET username = $2, is_admin = $3 WHERE id = $1', [
+        userId,
+        username,
+        Boolean(isAdmin)
+      ]);
+
+      if (password && String(password).trim()) {
+        const passwordHash = bcrypt.hashSync(password, 12);
+        await client.query('UPDATE users SET password_hash = $2 WHERE id = $1', [userId, passwordHash]);
+      }
+
+      await client.query('DELETE FROM user_system_access WHERE user_id = $1', [userId]);
+      const finalIds = isAdmin
+        ? (await client.query('SELECT id FROM systems WHERE is_active = TRUE')).rows.map((row) => row.id)
+        : ids;
+
+      for (const systemId of finalIds) {
+        await client.query(
+          'INSERT INTO user_system_access (user_id, system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [userId, systemId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  const tx = sqliteDb.transaction((payload) => {
+    const found = sqliteDb.prepare('SELECT id FROM users WHERE id = ?').get(payload.userId);
+    if (!found) {
+      return false;
+    }
+
+    sqliteDb
+      .prepare('UPDATE users SET username = ?, is_admin = ? WHERE id = ?')
+      .run(payload.username, payload.isAdmin ? 1 : 0, payload.userId);
+
+    if (payload.password && String(payload.password).trim()) {
+      const passwordHash = bcrypt.hashSync(payload.password, 12);
+      sqliteDb
+        .prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+        .run(passwordHash, payload.userId);
+    }
+
+    sqliteDb.prepare('DELETE FROM user_system_access WHERE user_id = ?').run(payload.userId);
+    const finalIds = payload.isAdmin
+      ? sqliteDb
+          .prepare('SELECT id FROM systems WHERE is_active = 1')
+          .all()
+          .map((row) => row.id)
+      : payload.systemIds;
+
+    const grant = sqliteDb.prepare(
+      'INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)'
+    );
+    for (const systemId of finalIds) {
+      grant.run(payload.userId, systemId);
+    }
+
+    return true;
+  });
+
+  return tx({ userId, username, password, isAdmin, systemIds: ids });
+}
+
 async function updateUserSystemAccess(userId, systemIds) {
   const ids = normalizeIdArray(systemIds);
 
@@ -468,7 +570,7 @@ async function listSystems({ includeInactive = true } = {}) {
     .all();
 }
 
-async function createSystem({ name, url, description, allowedUserIds }) {
+async function createSystem({ name, url, description, previewImageUrl, allowedUserIds }) {
   const safeUserIds = normalizeIdArray(allowedUserIds);
 
   if (isPostgres) {
@@ -476,8 +578,10 @@ async function createSystem({ name, url, description, allowedUserIds }) {
     try {
       await client.query('BEGIN');
       const inserted = await client.query(
-        'INSERT INTO systems (name, url, description, is_active) VALUES ($1, $2, $3, TRUE) RETURNING id',
-        [name, url, description || null]
+        `INSERT INTO systems (name, url, description, preview_image_url, is_active)
+         VALUES ($1, $2, $3, $4, TRUE)
+         RETURNING id`,
+        [name, url, description || null, previewImageUrl || null]
       );
 
       const systemId = inserted.rows[0].id;
@@ -506,8 +610,11 @@ async function createSystem({ name, url, description, allowedUserIds }) {
 
   const tx = sqliteDb.transaction((payload) => {
     const result = sqliteDb
-      .prepare('INSERT INTO systems (name, url, description, is_active) VALUES (?, ?, ?, 1)')
-      .run(payload.name, payload.url, payload.description || null);
+      .prepare(
+        `INSERT INTO systems (name, url, description, preview_image_url, is_active)
+         VALUES (?, ?, ?, ?, 1)`
+      )
+      .run(payload.name, payload.url, payload.description || null, payload.previewImageUrl || null);
 
     const systemId = Number(result.lastInsertRowid);
     const admins = sqliteDb
@@ -527,18 +634,19 @@ async function createSystem({ name, url, description, allowedUserIds }) {
     return systemId;
   });
 
-  return tx({ name, url, description, allowedUserIds: safeUserIds });
+  return tx({ name, url, description, previewImageUrl, allowedUserIds: safeUserIds });
 }
 
-async function updateSystem(systemId, { name, url, description }) {
+async function updateSystem(systemId, { name, url, description, previewImageUrl }) {
   if (isPostgres) {
     const result = await pgPool.query(
       `UPDATE systems
        SET name = $2,
            url = $3,
-           description = $4
+           description = $4,
+           preview_image_url = $5
        WHERE id = $1`,
-      [systemId, name, url, description || null]
+      [systemId, name, url, description || null, previewImageUrl || null]
     );
     return result.rowCount > 0;
   }
@@ -548,10 +656,11 @@ async function updateSystem(systemId, { name, url, description }) {
       `UPDATE systems
        SET name = ?,
            url = ?,
-           description = ?
+           description = ?,
+           preview_image_url = ?
        WHERE id = ?`
     )
-    .run(name, url, description || null, systemId);
+    .run(name, url, description || null, previewImageUrl || null, systemId);
   return result.changes > 0;
 }
 
@@ -597,6 +706,7 @@ module.exports = {
   listUsers,
   listUsersBasic,
   createUser,
+  updateUser,
   updateUserSystemAccess,
   listSystems,
   createSystem,

@@ -1,0 +1,46 @@
+﻿<%- include('partials/head', { title, theme }) %>
+
+<main class="admin-page omega-page">
+  <header class="page-header glass-card omega-header">
+    <div class="admin-header-left">
+      <img src="<%= fixedLogoUrl %>" alt="Omega Distribuidora" class="omega-logo" onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';" />
+      <div>
+        <h1>Menu Administrativo</h1>
+        <p>Escolha a area que deseja gerenciar.</p>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a class="btn btn-secondary" href="/dashboard">Voltar ao painel</a>
+      <form method="post" action="/logout">
+        <button type="submit" class="btn btn-ghost">Sair</button>
+      </form>
+    </div>
+  </header>
+
+  <%- include('partials/flash', { flash }) %>
+
+  <section class="glass-card admin-section">
+    <div class="admin-menu-grid">
+      <a class="admin-menu-card" href="/admin/users">
+        <h2>Usuarios</h2>
+        <p>Criar e editar usuarios, senha, perfil e acessos.</p>
+        <strong><%= usersCount %> cadastrados</strong>
+      </a>
+
+      <a class="admin-menu-card" href="/admin/systems">
+        <h2>Sistemas</h2>
+        <p>Criar, editar links, definir preview e liberar acessos.</p>
+        <strong><%= systemsCount %> cadastrados</strong>
+      </a>
+
+      <article class="admin-menu-card static">
+        <h2>Biblioteca</h2>
+        <p>Imagens enviadas para preview de sistemas.</p>
+        <strong><%= imagesCount %> imagens</strong>
+      </article>
+    </div>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

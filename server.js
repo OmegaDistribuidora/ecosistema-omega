@@ -13,13 +13,12 @@ const {
   listUsers,
   listUsersBasic,
   createUser,
-  updateUserSystemAccess,
+  updateUser,
   listSystems,
   createSystem,
   updateSystem,
   getUserAccessibleSystems,
   getSettings,
-  updateSettings,
   getDatabaseEngineLabel
 } = require('./src/db');
 
@@ -32,11 +31,16 @@ const imagesDir =
   (process.env.NODE_ENV === 'production' ? '/images' : path.join(__dirname, 'data', 'images'));
 const allowedImageExts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
 
+const FIXED_LOGO_URL = '/images/logo.png';
+const FIXED_MASCOT_URL = '/images/aurora.png';
+const STATUS_TTL_MS = Math.max(5000, Number(process.env.SYSTEM_STATUS_TTL_MS || 60000));
+const STATUS_TIMEOUT_MS = Math.max(1000, Number(process.env.SYSTEM_STATUS_TIMEOUT_MS || 4000));
+const systemStatusCache = new Map();
+
 function ensureImagesDir() {
-  if (fs.existsSync(imagesDir)) {
-    return;
+  if (!fs.existsSync(imagesDir)) {
+    fs.mkdirSync(imagesDir, { recursive: true });
   }
-  fs.mkdirSync(imagesDir, { recursive: true });
 }
 
 function sanitizeBaseName(value) {
@@ -49,18 +53,46 @@ function sanitizeBaseName(value) {
     .toLowerCase();
 }
 
+function getImageFileNameFromUrl(url) {
+  const value = String(url || '').trim();
+  if (!value.startsWith('/images/')) {
+    return null;
+  }
+
+  const fileName = decodeURIComponent(value.slice('/images/'.length));
+  if (!fileName || fileName.includes('/') || fileName.includes('\\')) {
+    return null;
+  }
+
+  return fileName;
+}
+
+function imageUrlExists(url) {
+  const fileName = getImageFileNameFromUrl(url);
+  if (!fileName) {
+    return false;
+  }
+  return fs.existsSync(path.join(imagesDir, fileName));
+}
+
+function normalizePreviewImageUrl(rawUrl) {
+  const value = String(rawUrl || '').trim();
+  if (!value) {
+    return null;
+  }
+  return imageUrlExists(value) ? value : null;
+}
+
 function listUploadedImages() {
   if (!fs.existsSync(imagesDir)) {
     return [];
   }
 
-  const files = fs
+  return fs
     .readdirSync(imagesDir, { withFileTypes: true })
     .filter((entry) => entry.isFile())
     .map((entry) => entry.name)
-    .filter((name) => allowedImageExts.has(path.extname(name).toLowerCase()));
-
-  return files
+    .filter((name) => allowedImageExts.has(path.extname(name).toLowerCase()))
     .map((name) => {
       const fullPath = path.join(imagesDir, name);
       const stats = fs.statSync(fullPath);
@@ -74,79 +106,14 @@ function listUploadedImages() {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-function getImageFileNameFromUrl(url) {
-  const value = String(url || '').trim();
-  if (!value.startsWith('/images/')) {
-    return null;
-  }
-  const filename = decodeURIComponent(value.slice('/images/'.length));
-  if (!filename || filename.includes('/') || filename.includes('\\')) {
-    return null;
-  }
-  return filename;
-}
-
-function imageUrlExists(url) {
-  const filename = getImageFileNameFromUrl(url);
-  if (!filename) {
-    return false;
-  }
-  return fs.existsSync(path.join(imagesDir, filename));
-}
-
-function findLatestImageByPrefix(prefix) {
-  const normalizedPrefix = `${String(prefix || '').toLowerCase()}`;
-  const matches = listUploadedImages().filter((asset) => {
-    const lower = asset.name.toLowerCase();
-    return lower.startsWith(`${normalizedPrefix}-`) || lower.startsWith(`${normalizedPrefix}.`);
-  });
-  return matches.length ? matches[0] : null;
-}
-
-async function resolveThemeAssets(baseTheme) {
-  const theme = { ...(baseTheme || {}) };
-  const patch = {};
-
-  if (!imageUrlExists(theme.logo_url)) {
-    const latestLogo = findLatestImageByPrefix('logo');
-    if (latestLogo) {
-      theme.logo_url = latestLogo.url;
-      patch.logo_url = latestLogo.url;
-    }
-  }
-
-  if (!imageUrlExists(theme.mascot_url)) {
-    const latestAurora = findLatestImageByPrefix('aurora');
-    if (latestAurora) {
-      theme.mascot_url = latestAurora.url;
-      patch.mascot_url = latestAurora.url;
-    }
-  }
-
-  if (Object.keys(patch).length) {
-    await updateSettings(patch);
-  }
-
-  return theme;
-}
-
-function buildUploadFileName(target, customName, originalName) {
+function buildUploadFileName(customName, originalName) {
   const originalExt = path.extname(originalName || '').toLowerCase();
-  const extension = allowedImageExts.has(originalExt) ? originalExt : '';
-  const safeExt = extension || '.png';
-
-  if (target === 'logo') {
-    return `logo${safeExt}`;
-  }
-
-  if (target === 'aurora') {
-    return `aurora${safeExt}`;
-  }
+  const extension = allowedImageExts.has(originalExt) ? originalExt : '.png';
 
   const stemFromCustom = sanitizeBaseName(customName);
   const stemFromFile = sanitizeBaseName(path.basename(originalName || '', originalExt));
   const stem = stemFromCustom || stemFromFile || 'imagem';
-  return `${stem}-${Date.now()}${safeExt}`;
+  return `${stem}-${Date.now()}${extension}`;
 }
 
 const imageUpload = multer({
@@ -160,9 +127,7 @@ const imageUpload = multer({
       }
     },
     filename: (req, file, cb) => {
-      const target = String(req.body.upload_target || 'custom').toLowerCase();
-      const customName = req.body.custom_name || '';
-      cb(null, buildUploadFileName(target, customName, file.originalname));
+      cb(null, buildUploadFileName(req.body.custom_name, file.originalname));
     }
   }),
   limits: {
@@ -188,11 +153,13 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use('/public', express.static(path.join(__dirname, 'public')));
+
 try {
   ensureImagesDir();
 } catch (error) {
   console.warn(`Nao foi possivel preparar o diretorio de imagens (${imagesDir}):`, error.message);
 }
+
 if (fs.existsSync(imagesDir)) {
   app.use('/images', express.static(imagesDir, { maxAge: '1h' }));
 }
@@ -227,13 +194,99 @@ function setFlash(req, type, message) {
   req.session.flash = { type, message };
 }
 
+function parseIds(raw) {
+  const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return values
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item > 0);
+}
+
+function normalizeSystemUrl(rawUrl) {
+  const value = String(rawUrl || '').trim();
+  return /^https?:\/\//i.test(value) ? value : null;
+}
+
+async function fetchWithTimeout(url, method = 'HEAD') {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      method,
+      redirect: 'follow',
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function probeSystemStatus(url) {
+  const checkedAt = new Date().toISOString();
+  const normalizedUrl = normalizeSystemUrl(url);
+  if (!normalizedUrl) {
+    return { online: false, statusCode: null, checkedAt };
+  }
+
+  for (const method of ['HEAD', 'GET']) {
+    try {
+      const response = await fetchWithTimeout(normalizedUrl, method);
+      if (response) {
+        const online = response.status >= 100 && response.status < 500;
+        return { online, statusCode: response.status, checkedAt };
+      }
+    } catch (error) {
+      // tenta o metodo seguinte antes de marcar indisponivel
+    }
+  }
+
+  return { online: false, statusCode: null, checkedAt };
+}
+
+async function getCachedSystemStatus(url) {
+  const normalizedUrl = normalizeSystemUrl(url);
+  const checkedAt = new Date().toISOString();
+  if (!normalizedUrl) {
+    return { online: false, statusCode: null, checkedAt };
+  }
+
+  const now = Date.now();
+  const cached = systemStatusCache.get(normalizedUrl);
+  if (cached && now - cached.cachedAt < STATUS_TTL_MS) {
+    return cached.value;
+  }
+
+  const value = await probeSystemStatus(normalizedUrl);
+  systemStatusCache.set(normalizedUrl, { cachedAt: now, value });
+
+  if (systemStatusCache.size > 300) {
+    const oldestKey = systemStatusCache.keys().next().value;
+    if (oldestKey) {
+      systemStatusCache.delete(oldestKey);
+    }
+  }
+
+  return value;
+}
+
+async function buildSystemsStatusMap(systems) {
+  const result = {};
+  await Promise.all(
+    (systems || []).map(async (system) => {
+      result[system.id] = await getCachedSystemStatus(system.url);
+    })
+  );
+  return result;
+}
+
 app.use(async (req, res, next) => {
   try {
     const userId = req.session.userId;
 
     if (!userId) {
       res.locals.currentUser = null;
-      res.locals.theme = await resolveThemeAssets(await getSettings());
+      res.locals.theme = await getSettings();
+      res.locals.fixedLogoUrl = FIXED_LOGO_URL;
+      res.locals.fixedMascotUrl = FIXED_MASCOT_URL;
       return next();
     }
 
@@ -246,7 +299,9 @@ app.use(async (req, res, next) => {
     }
 
     res.locals.currentUser = user;
-    res.locals.theme = await resolveThemeAssets(await getSettings());
+    res.locals.theme = await getSettings();
+    res.locals.fixedLogoUrl = FIXED_LOGO_URL;
+    res.locals.fixedMascotUrl = FIXED_MASCOT_URL;
     next();
   } catch (error) {
     next(error);
@@ -268,13 +323,6 @@ function requireAdmin(req, res, next) {
     });
   }
   next();
-}
-
-function parseIds(raw) {
-  const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  return values
-    .map((item) => Number(item))
-    .filter((item) => Number.isInteger(item) && item > 0);
 }
 
 app.get('/', (req, res) => {
@@ -318,7 +366,6 @@ app.post('/login', async (req, res, next) => {
     }
 
     req.session.userId = user.id;
-    setFlash(req, 'success', `Bem-vindo, ${user.username}.`);
     res.redirect('/dashboard');
   } catch (error) {
     next(error);
@@ -335,11 +382,19 @@ app.get('/dashboard', requireAuth, async (req, res, next) => {
   try {
     const user = res.locals.currentUser;
     const systems = await getUserAccessibleSystems(user.id, Boolean(user.is_admin));
+    const systemStatuses = await buildSystemsStatusMap(systems);
+    const todayLabel = new Intl.DateTimeFormat('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long'
+    }).format(new Date());
 
     res.render('dashboard', {
       title: 'Ecossistema Omega',
       flash: getFlash(req),
-      systems
+      systems,
+      systemStatuses,
+      todayLabel
     });
   } catch (error) {
     next(error);
@@ -350,14 +405,42 @@ app.get('/admin', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const users = await listUsers();
     const systems = await listSystems({ includeInactive: true });
+    const images = listUploadedImages();
 
-    res.render('admin', {
-      title: 'Administracao',
+    res.render('admin-home', {
+      title: 'Menu Administrativo',
       flash: getFlash(req),
-      users,
+      usersCount: users.length,
+      systemsCount: systems.length,
+      imagesCount: images.length
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/admin/users', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    res.render('admin-users', {
+      title: 'Gerenciar Usuarios',
+      flash: getFlash(req),
+      users: await listUsers(),
+      systems: await listSystems({ includeInactive: true })
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/admin/systems', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const users = await listUsers();
+    res.render('admin-systems', {
+      title: 'Gerenciar Sistemas',
+      flash: getFlash(req),
+      systems: await listSystems({ includeInactive: true }),
       usersBasic: await listUsersBasic(),
-      systems,
-      settings: await resolveThemeAssets(await getSettings()),
+      users,
       uploadedImages: listUploadedImages(),
       imagesDir
     });
@@ -375,55 +458,75 @@ app.post('/admin/users', requireAuth, requireAdmin, async (req, res, next) => {
 
     if (!username || !password) {
       setFlash(req, 'error', 'Usuario e senha sao obrigatorios.');
-      return res.redirect('/admin');
+      return res.redirect('/admin/users');
     }
 
     if (password.length < 6) {
       setFlash(req, 'error', 'A senha precisa ter no minimo 6 caracteres.');
-      return res.redirect('/admin');
+      return res.redirect('/admin/users');
     }
 
     try {
       await createUser({ username, password, isAdmin, systemIds });
       setFlash(req, 'success', `Usuario ${username} criado com sucesso.`);
     } catch (error) {
-      if (error && String(error.message || '').toUpperCase().includes('UNIQUE')) {
+      if (String(error.message || '').toUpperCase().includes('UNIQUE')) {
         setFlash(req, 'error', 'Nome de usuario ja existe.');
       } else {
         setFlash(req, 'error', 'Falha ao criar usuario.');
       }
     }
 
-    res.redirect('/admin');
+    res.redirect('/admin/users');
   } catch (error) {
     next(error);
   }
 });
 
-app.post('/admin/users/:id/access', requireAuth, requireAdmin, async (req, res, next) => {
+app.post('/admin/users/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
+    const username = String(req.body.username || '').trim();
+    const password = String(req.body.password || '');
+    const isAdmin = req.body.is_admin === 'on';
     const systemIds = parseIds(req.body.system_ids);
 
     if (!Number.isInteger(userId) || userId <= 0) {
       setFlash(req, 'error', 'Usuario invalido.');
-      return res.redirect('/admin');
+      return res.redirect('/admin/users');
     }
 
-    const user = await findUserById(userId);
-    if (!user) {
-      setFlash(req, 'error', 'Usuario nao encontrado.');
-      return res.redirect('/admin');
+    if (!username) {
+      setFlash(req, 'error', 'O nome de usuario e obrigatorio.');
+      return res.redirect('/admin/users');
     }
 
-    if (user.is_admin) {
-      setFlash(req, 'error', 'Permissoes de administrador sao completas por padrao.');
-      return res.redirect('/admin');
+    if (password && password.length < 6) {
+      setFlash(req, 'error', 'A nova senha precisa ter no minimo 6 caracteres.');
+      return res.redirect('/admin/users');
     }
 
-    await updateUserSystemAccess(userId, systemIds);
-    setFlash(req, 'success', `Permissoes de ${user.username} atualizadas.`);
-    res.redirect('/admin');
+    if (res.locals.currentUser && Number(res.locals.currentUser.id) === userId && !isAdmin) {
+      setFlash(req, 'error', 'Voce nao pode remover seu proprio acesso de administrador.');
+      return res.redirect('/admin/users');
+    }
+
+    try {
+      const updated = await updateUser({ userId, username, password, isAdmin, systemIds });
+      if (!updated) {
+        setFlash(req, 'error', 'Usuario nao encontrado.');
+      } else {
+        setFlash(req, 'success', `Usuario ${username} atualizado com sucesso.`);
+      }
+    } catch (error) {
+      if (String(error.message || '').toUpperCase().includes('UNIQUE')) {
+        setFlash(req, 'error', 'Nome de usuario ja existe.');
+      } else {
+        setFlash(req, 'error', 'Falha ao atualizar usuario.');
+      }
+    }
+
+    res.redirect('/admin/users');
   } catch (error) {
     next(error);
   }
@@ -434,26 +537,32 @@ app.post('/admin/systems', requireAuth, requireAdmin, async (req, res, next) => 
     const name = String(req.body.name || '').trim();
     const url = String(req.body.url || '').trim();
     const description = String(req.body.description || '').trim();
+    const previewImageUrl = normalizePreviewImageUrl(req.body.preview_image_url);
     const allowedUserIds = parseIds(req.body.user_ids);
 
     if (!name || !url) {
       setFlash(req, 'error', 'Nome e link do sistema sao obrigatorios.');
-      return res.redirect('/admin');
+      return res.redirect('/admin/systems');
     }
 
     if (!/^https?:\/\//i.test(url)) {
       setFlash(req, 'error', 'Informe uma URL valida com http:// ou https://');
-      return res.redirect('/admin');
+      return res.redirect('/admin/systems');
+    }
+
+    if (req.body.preview_image_url && !previewImageUrl) {
+      setFlash(req, 'error', 'Imagem de preview invalida ou inexistente no volume.');
+      return res.redirect('/admin/systems');
     }
 
     try {
-      await createSystem({ name, url, description, allowedUserIds });
+      await createSystem({ name, url, description, previewImageUrl, allowedUserIds });
       setFlash(req, 'success', `Sistema ${name} criado com sucesso.`);
     } catch (error) {
       setFlash(req, 'error', 'Falha ao criar sistema.');
     }
 
-    res.redirect('/admin');
+    res.redirect('/admin/systems');
   } catch (error) {
     next(error);
   }
@@ -465,99 +574,56 @@ app.post('/admin/systems/:id', requireAuth, requireAdmin, async (req, res, next)
     const name = String(req.body.name || '').trim();
     const url = String(req.body.url || '').trim();
     const description = String(req.body.description || '').trim();
+    const previewImageUrl = normalizePreviewImageUrl(req.body.preview_image_url);
 
     if (!Number.isInteger(systemId) || systemId <= 0) {
       setFlash(req, 'error', 'Sistema invalido.');
-      return res.redirect('/admin');
+      return res.redirect('/admin/systems');
     }
 
     if (!name || !url) {
       setFlash(req, 'error', 'Nome e link do sistema sao obrigatorios.');
-      return res.redirect('/admin');
+      return res.redirect('/admin/systems');
     }
 
     if (!/^https?:\/\//i.test(url)) {
       setFlash(req, 'error', 'Informe uma URL valida com http:// ou https://');
-      return res.redirect('/admin');
+      return res.redirect('/admin/systems');
     }
 
-    const updated = await updateSystem(systemId, { name, url, description });
+    if (req.body.preview_image_url && !previewImageUrl) {
+      setFlash(req, 'error', 'Imagem de preview invalida ou inexistente no volume.');
+      return res.redirect('/admin/systems');
+    }
+
+    const updated = await updateSystem(systemId, { name, url, description, previewImageUrl });
     if (!updated) {
       setFlash(req, 'error', 'Sistema nao encontrado.');
-      return res.redirect('/admin');
+      return res.redirect('/admin/systems');
     }
 
     setFlash(req, 'success', `Sistema ${name} atualizado com sucesso.`);
-    res.redirect('/admin');
+    res.redirect('/admin/systems');
   } catch (error) {
     next(error);
   }
 });
 
 app.post('/admin/assets/upload', requireAuth, requireAdmin, (req, res, next) => {
-  imageUpload.single('image_file')(req, res, async (error) => {
+  imageUpload.single('image_file')(req, res, (error) => {
     if (error) {
       setFlash(req, 'error', error.message || 'Falha no upload da imagem.');
-      return res.redirect('/admin');
+      return res.redirect('/admin/systems');
     }
 
-    try {
-      if (!req.file) {
-        setFlash(req, 'error', 'Selecione um arquivo de imagem.');
-        return res.redirect('/admin');
-      }
-
-      const target = String(req.body.upload_target || 'custom').toLowerCase();
-      const fileUrl = `/images/${encodeURIComponent(req.file.filename)}`;
-
-      if (target === 'logo') {
-        await updateSettings({ logo_url: fileUrl });
-      } else if (target === 'aurora') {
-        await updateSettings({ mascot_url: fileUrl });
-      } else {
-        const normalizedCustom = sanitizeBaseName(req.body.custom_name || '');
-        if (normalizedCustom === 'logo') {
-          await updateSettings({ logo_url: fileUrl });
-        }
-        if (normalizedCustom === 'aurora') {
-          await updateSettings({ mascot_url: fileUrl });
-        }
-      }
-
-      setFlash(req, 'success', `Imagem enviada com sucesso: ${req.file.filename}`);
-      res.redirect('/admin');
-    } catch (routeError) {
-      next(routeError);
+    if (!req.file) {
+      setFlash(req, 'error', 'Selecione um arquivo de imagem.');
+      return res.redirect('/admin/systems');
     }
+
+    setFlash(req, 'success', `Imagem enviada com sucesso: /images/${req.file.filename}`);
+    res.redirect('/admin/systems');
   });
-});
-
-app.post('/admin/assets/use', requireAuth, requireAdmin, async (req, res, next) => {
-  try {
-    const target = String(req.body.target || '').toLowerCase();
-    const imageUrl = String(req.body.image_url || '').trim();
-
-    if (!['logo', 'aurora'].includes(target)) {
-      setFlash(req, 'error', 'Destino de imagem invalido.');
-      return res.redirect('/admin');
-    }
-
-    if (!imageUrlExists(imageUrl)) {
-      setFlash(req, 'error', 'Imagem nao encontrada no volume.');
-      return res.redirect('/admin');
-    }
-
-    if (target === 'logo') {
-      await updateSettings({ logo_url: imageUrl });
-    } else {
-      await updateSettings({ mascot_url: imageUrl });
-    }
-
-    setFlash(req, 'success', `Imagem aplicada como ${target}.`);
-    res.redirect('/admin');
-  } catch (error) {
-    next(error);
-  }
 });
 
 app.use((req, res) => {
@@ -573,9 +639,18 @@ app.use((error, req, res, next) => {
     return next(error);
   }
 
+  const isProduction = process.env.NODE_ENV === 'production';
+  const debugMessage =
+    !isProduction && error
+      ? `${error.message || 'Erro desconhecido.'}${error.stack ? `\n${error.stack}` : ''}`
+      : null;
+
   res.status(500).render('error', {
     title: 'Erro interno',
-    flash: { type: 'error', message: 'Ocorreu um erro interno no servidor.' }
+    flash: {
+      type: 'error',
+      message: debugMessage || 'Ocorreu um erro interno no servidor.'
+    }
   });
 });
 
