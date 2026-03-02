@@ -115,6 +115,12 @@ function buildUploadFileName(customName, originalName) {
   const stemFromCustom = sanitizeBaseName(customName);
   const stemFromFile = sanitizeBaseName(path.basename(originalName || '', originalExt));
   const stem = stemFromCustom || stemFromFile || 'imagem';
+
+  // Mantem nomes fixos para os assets principais usados pelo layout.
+  if (stem === 'logo' || stem === 'aurora') {
+    return `${stem}.png`;
+  }
+
   return `${stem}-${Date.now()}${extension}`;
 }
 
