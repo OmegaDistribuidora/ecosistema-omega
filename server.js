@@ -18,6 +18,8 @@ const {
   createSystem,
   updateSystem,
   getUserAccessibleSystems,
+  registerHistoryEntry,
+  listHistory,
   getSettings,
   getDatabaseEngineLabel
 } = require('./src/db');
@@ -383,6 +385,11 @@ app.get('/dashboard', requireAuth, async (req, res, next) => {
     const user = res.locals.currentUser;
     const systems = await getUserAccessibleSystems(user.id, Boolean(user.is_admin));
     const systemStatuses = await buildSystemsStatusMap(systems);
+    try {
+      await registerHistoryEntry({ userId: user.id, systemId: null });
+    } catch (historyError) {
+      console.warn('Falha ao registrar historico de acesso ao ecossistema:', historyError.message);
+    }
     const todayLabel = new Intl.DateTimeFormat('pt-BR', {
       weekday: 'long',
       day: '2-digit',
@@ -396,6 +403,36 @@ app.get('/dashboard', requireAuth, async (req, res, next) => {
       systemStatuses,
       todayLabel
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/go/:systemId', requireAuth, async (req, res, next) => {
+  try {
+    const user = res.locals.currentUser;
+    const systemId = Number(req.params.systemId);
+
+    if (!Number.isInteger(systemId) || systemId <= 0) {
+      setFlash(req, 'error', 'Sistema invalido.');
+      return res.redirect('/dashboard');
+    }
+
+    const systems = await getUserAccessibleSystems(user.id, Boolean(user.is_admin));
+    const selectedSystem = systems.find((system) => Number(system.id) === systemId);
+
+    if (!selectedSystem) {
+      setFlash(req, 'error', 'Sistema nao disponivel para seu usuario.');
+      return res.redirect('/dashboard');
+    }
+
+    try {
+      await registerHistoryEntry({ userId: user.id, systemId });
+    } catch (historyError) {
+      console.warn('Falha ao registrar historico de acesso:', historyError.message);
+    }
+
+    res.redirect(selectedSystem.url);
   } catch (error) {
     next(error);
   }
@@ -443,6 +480,18 @@ app.get('/admin/systems', requireAuth, requireAdmin, async (req, res, next) => {
       users,
       uploadedImages: listUploadedImages(),
       imagesDir
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/admin/history', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    res.render('admin-history', {
+      title: 'Historico de Acessos',
+      flash: getFlash(req),
+      historyRows: await listHistory({ limit: 500 })
     });
   } catch (error) {
     next(error);

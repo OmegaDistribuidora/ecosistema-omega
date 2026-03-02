@@ -3,12 +3,10 @@
   const image = document.querySelector('[data-preview-target]');
   const placeholder = document.querySelector('[data-preview-placeholder]');
   const titleEl = document.querySelector('[data-preview-title]');
-  const urlEl = document.querySelector('[data-preview-url]');
-  const openBtn = document.querySelector('[data-preview-open]');
   const mobileSelect = document.querySelector('[data-mobile-system-select]');
   const mobileOpen = document.querySelector('[data-mobile-open-link]');
 
-  if (!links.length || !image || !placeholder || !titleEl || !urlEl || !openBtn) {
+  if (!links.length || !image || !placeholder || !titleEl) {
     return;
   }
 
@@ -23,20 +21,15 @@
   function clearPreview() {
     setActive(null);
     titleEl.textContent = 'Nenhum módulo selecionado';
-    urlEl.textContent = 'Selecione um módulo para visualizar a prévia.';
-    openBtn.classList.add('hidden');
-    openBtn.setAttribute('aria-disabled', 'true');
-    openBtn.setAttribute('href', '#');
     image.classList.add('hidden');
     placeholder.classList.remove('hidden');
   }
 
   function showPreviewFromData(payload, sourceLink) {
     const name = String(payload.name || '').trim();
-    const url = String(payload.url || '').trim();
     const previewImage = String(payload.previewImage || '').trim() || DEFAULT_PREVIEW;
 
-    if (!name || !url) {
+    if (!name) {
       clearPreview();
       return;
     }
@@ -46,10 +39,6 @@
     }
 
     titleEl.textContent = name;
-    urlEl.textContent = url;
-    openBtn.classList.remove('hidden');
-    openBtn.removeAttribute('aria-disabled');
-    openBtn.setAttribute('href', url);
 
     image.onerror = () => {
       image.onerror = null;
@@ -63,7 +52,6 @@
   function dataFromLink(link) {
     return {
       name: link.dataset.systemName,
-      url: link.dataset.systemUrl,
       previewImage: link.dataset.previewImage
     };
   }
@@ -87,12 +75,11 @@
 
       const payload = {
         name: selected.dataset.name,
-        url: selected.dataset.url,
         previewImage: selected.dataset.previewImage
       };
 
       mobileOpen.classList.remove('disabled');
-      mobileOpen.setAttribute('href', payload.url || '#');
+      mobileOpen.setAttribute('href', `/go/${value}`);
 
       const matched = links.find((item) => String(item.dataset.systemId || '') === value);
       showPreviewFromData(payload, matched || null);

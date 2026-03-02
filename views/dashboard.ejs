@@ -53,19 +53,6 @@
       </div>
     </div>
 
-    <div class="selector-intro">
-      <div>
-        <h2>Sistemas da Omega</h2>
-        <p class="muted">Selecione um módulo para acessar.</p>
-      </div>
-      <img
-        src="<%= fixedMascotUrl %>"
-        alt="Personagem Omega"
-        class="omega-mascot"
-        onerror="this.onerror=null;this.src='/public/assets/omega-boneca.svg';"
-      />
-    </div>
-
     <div class="mobile-system-picker">
       <label for="mobile-system-select" class="small muted">Módulo</label>
       <div class="mobile-picker-row">
@@ -74,7 +61,6 @@
           <% systems.forEach((system) => { %>
             <option
               value="<%= system.id %>"
-              data-url="<%= system.url %>"
               data-name="<%= system.name %>"
               data-preview-image="<%= system.preview_image_url || '/public/assets/omega-logo.svg' %>"
             >
@@ -97,13 +83,12 @@
           <% const status = (systemStatuses && systemStatuses[system.id]) || { online: false, statusCode: null }; %>
           <a
             class="system-item <%= meta.tone %>"
-            href="<%= system.url %>"
+            href="/go/<%= system.id %>"
             target="_blank"
             rel="noopener noreferrer"
             data-preview-link
             data-system-id="<%= system.id %>"
             data-system-name="<%= system.name %>"
-            data-system-url="<%= system.url %>"
             data-preview-image="<%= system.preview_image_url || '/public/assets/omega-logo.svg' %>"
           >
             <div class="system-item-top">
@@ -121,15 +106,8 @@
       <aside class="preview-panel">
         <div class="preview-panel-header">
           <div>
-            <p class="small muted">Preview</p>
             <h3 data-preview-title>Nenhum módulo selecionado</h3>
           </div>
-          <a href="#" class="btn btn-primary preview-open-btn hidden" data-preview-open target="_blank" rel="noopener noreferrer">Abrir em nova aba</a>
-        </div>
-
-        <div class="preview-urlbar">
-          <span class="url-label">URL</span>
-          <span class="url-value" data-preview-url>Selecione um módulo para visualizar a prévia.</span>
         </div>
 
         <div class="preview-frame-wrap">

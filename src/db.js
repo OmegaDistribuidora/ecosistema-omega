@@ -104,6 +104,13 @@ async function initializePostgres() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS historico (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      system_id INTEGER REFERENCES systems(id) ON DELETE SET NULL,
+      accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   await pgPool.query(
@@ -190,6 +197,15 @@ function initializeSqlite() {
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS historico (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      system_id INTEGER,
+      accessed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (system_id) REFERENCES systems(id) ON DELETE SET NULL
     );
   `);
 
@@ -695,6 +711,79 @@ async function getUserAccessibleSystems(userId, isAdmin) {
     .all(userId);
 }
 
+async function registerHistoryEntry({ userId, systemId = null }) {
+  const safeUserId = Number(userId);
+  if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+    return;
+  }
+
+  let safeSystemId = null;
+  if (systemId !== null && systemId !== undefined && String(systemId).trim() !== '') {
+    safeSystemId = Number(systemId);
+    if (!Number.isInteger(safeSystemId) || safeSystemId <= 0) {
+      return;
+    }
+  }
+
+  if (isPostgres) {
+    await pgPool.query(
+      'INSERT INTO historico (user_id, system_id) VALUES ($1, $2)',
+      [safeUserId, safeSystemId]
+    );
+    return;
+  }
+
+  sqliteDb
+    .prepare('INSERT INTO historico (user_id, system_id) VALUES (?, ?)')
+    .run(safeUserId, safeSystemId);
+}
+
+async function listHistory({ limit = 300 } = {}) {
+  const safeLimit = Number.isInteger(Number(limit)) ? Math.max(1, Math.min(1000, Number(limit))) : 300;
+
+  if (isPostgres) {
+    const result = await pgPool.query(
+      `SELECT
+         h.id,
+         h.user_id,
+         h.system_id,
+         h.accessed_at,
+         u.username,
+         CASE
+           WHEN h.system_id IS NULL THEN 'Ecossistema'
+           ELSE s.name
+         END AS system_name
+       FROM historico h
+       LEFT JOIN users u ON u.id = h.user_id
+       LEFT JOIN systems s ON s.id = h.system_id
+       ORDER BY h.accessed_at DESC
+       LIMIT $1`,
+      [safeLimit]
+    );
+    return result.rows;
+  }
+
+  return sqliteDb
+    .prepare(
+      `SELECT
+         h.id,
+         h.user_id,
+         h.system_id,
+         h.accessed_at,
+         u.username,
+         CASE
+           WHEN h.system_id IS NULL THEN 'Ecossistema'
+           ELSE s.name
+         END AS system_name
+       FROM historico h
+       LEFT JOIN users u ON u.id = h.user_id
+       LEFT JOIN systems s ON s.id = h.system_id
+       ORDER BY datetime(h.accessed_at) DESC
+       LIMIT ?`
+    )
+    .all(safeLimit);
+}
+
 function getDatabaseEngineLabel() {
   return isPostgres ? 'postgres' : 'sqlite';
 }
@@ -712,6 +801,8 @@ module.exports = {
   createSystem,
   updateSystem,
   getUserAccessibleSystems,
+  registerHistoryEntry,
+  listHistory,
   getSettings,
   updateSettings,
   getDatabaseEngineLabel
