@@ -345,9 +345,10 @@ app.get('/login', (req, res) => {
     return res.redirect('/dashboard');
   }
 
+  const appName = (res.locals.theme && res.locals.theme.app_name) || 'Ecossistema Omega';
   res.render('login', {
     flash: getFlash(req),
-    title: 'Login'
+    title: `${appName} | Login`
   });
 });
 
@@ -401,9 +402,10 @@ app.get('/dashboard', requireAuth, async (req, res, next) => {
       day: '2-digit',
       month: 'long'
     }).format(new Date());
+    const appName = (res.locals.theme && res.locals.theme.app_name) || 'Ecossistema Omega';
 
     res.render('dashboard', {
-      title: 'Ecossistema Omega',
+      title: appName,
       flash: getFlash(req),
       systems,
       systemStatuses,
