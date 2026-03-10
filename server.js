@@ -306,6 +306,67 @@ function buildUserLinksIndex(rows) {
   return index;
 }
 
+function parseSystemIdsFromUser(user) {
+  return String((user && user.system_ids) || '')
+    .split(',')
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0);
+}
+
+function buildSsoMappingsViewModel(systems, users, linkRows) {
+  const ssoSystems = (systems || [])
+    .filter((system) => system && system.sso_enabled)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
+
+  const linkIndex = new Map();
+  for (const row of linkRows || []) {
+    const userId = Number(row.user_id);
+    const systemId = Number(row.system_id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      continue;
+    }
+    if (!Number.isInteger(systemId) || systemId <= 0) {
+      continue;
+    }
+    linkIndex.set(`${userId}:${systemId}`, String(row.external_login || '').trim());
+  }
+
+  return ssoSystems.map((system) => {
+    const rows = (users || [])
+      .filter((user) => parseSystemIdsFromUser(user).includes(Number(system.id)))
+      .map((user) => {
+        const externalLogin = linkIndex.get(`${user.id}:${system.id}`) || '';
+        return {
+          userId: Number(user.id),
+          username: user.username,
+          isAdmin: Boolean(user.is_admin),
+          externalLogin,
+          hasMapping: Boolean(externalLogin)
+        };
+      })
+      .sort((a, b) => {
+        if (a.hasMapping !== b.hasMapping) {
+          return a.hasMapping ? -1 : 1;
+        }
+        if (a.isAdmin !== b.isAdmin) {
+          return a.isAdmin ? -1 : 1;
+        }
+        return String(a.username || '').localeCompare(String(b.username || ''), 'pt-BR');
+      });
+
+    const mappedUsers = rows.filter((row) => row.hasMapping).length;
+    return {
+      id: Number(system.id),
+      name: system.name,
+      ssoKey: system.sso_key || '',
+      totalUsers: rows.length,
+      mappedUsers,
+      pendingUsers: Math.max(0, rows.length - mappedUsers),
+      rows
+    };
+  });
+}
+
 async function fetchWithTimeout(url, method = 'HEAD') {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
@@ -571,13 +632,19 @@ app.get('/admin', requireAuth, requireAdmin, async (req, res, next) => {
     const users = await listUsers();
     const systems = await listSystems({ includeInactive: true });
     const images = listUploadedImages();
+    const mappingGroups = buildSsoMappingsViewModel(
+      systems,
+      users,
+      await listAllUserSystemLinks()
+    );
 
     res.render('admin-home', {
       title: 'Menu Administrativo',
       flash: getFlash(req),
       usersCount: users.length,
       systemsCount: systems.length,
-      imagesCount: images.length
+      imagesCount: images.length,
+      mappedSystemsCount: mappingGroups.length
     });
   } catch (error) {
     next(error);
@@ -625,6 +692,26 @@ app.get('/admin/history', requireAuth, requireAdmin, async (req, res, next) => {
       title: 'Historico de Acessos',
       flash: getFlash(req),
       historyRows: await listHistory({ limit: 500 })
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/admin/mappings', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const users = await listUsers();
+    const systems = await listSystems({ includeInactive: true });
+    const mappingGroups = buildSsoMappingsViewModel(
+      systems,
+      users,
+      await listAllUserSystemLinks()
+    );
+
+    res.render('admin-mappings', {
+      title: 'Mapeamento de Logins',
+      flash: getFlash(req),
+      mappingGroups
     });
   } catch (error) {
     next(error);

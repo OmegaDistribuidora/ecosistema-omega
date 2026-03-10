@@ -1,0 +1,86 @@
+<%- include('partials/head', { title, theme }) %>
+
+<main class="admin-page omega-page">
+  <header class="page-header glass-card omega-header">
+    <div class="admin-header-left">
+      <img src="<%= fixedLogoUrl %>" alt="Omega Distribuidora" class="omega-logo" onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';" />
+      <div>
+        <h1>Mapeamento de Logins</h1>
+        <p>Visao administrativa dos usuarios vinculados aos logins dos sistemas com SSO delegado.</p>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <details class="admin-nav-dropdown">
+        <summary class="btn btn-secondary">Navegacao</summary>
+        <div class="admin-nav-menu glass-card">
+          <a href="/admin">Menu Admin</a>
+          <a href="/admin/users">Usuarios</a>
+          <a href="/admin/systems">Sistemas</a>
+          <a href="/admin/mappings">Mapeamentos</a>
+          <a href="/admin/history">Historico</a>
+          <a href="/dashboard">Painel Principal</a>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <%- include('partials/flash', { flash }) %>
+
+  <% if (!mappingGroups || !mappingGroups.length) { %>
+    <section class="glass-card admin-section">
+      <h2 class="section-title">Nenhum sistema com SSO delegado</h2>
+      <p class="muted">Habilite o login delegado em um sistema para visualizar os mapeamentos aqui.</p>
+    </section>
+  <% } else { %>
+    <section class="mapping-grid">
+      <% mappingGroups.forEach((group) => { %>
+        <article class="glass-card admin-section mapping-card">
+          <div class="mapping-card-header">
+            <div>
+              <h2><%= group.name %></h2>
+              <p class="muted small">Chave SSO: <code><%= group.ssoKey || '-' %></code></p>
+            </div>
+            <div class="mapping-stats">
+              <span class="mapping-stat is-success"><%= group.mappedUsers %> mapeados</span>
+              <span class="mapping-stat <%= group.pendingUsers ? 'is-warning' : '' %>"><%= group.pendingUsers %> pendentes</span>
+            </div>
+          </div>
+
+          <% if (!group.rows.length) { %>
+            <p class="muted">Nenhum usuario com acesso a este sistema.</p>
+          <% } else { %>
+            <div class="history-table-wrap">
+              <table class="history-table mapping-table">
+                <thead>
+                  <tr>
+                    <th>Usuario do Ecossistema</th>
+                    <th>Perfil</th>
+                    <th>Login no Sistema</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% group.rows.forEach((row) => { %>
+                    <tr>
+                      <td><%= row.username %></td>
+                      <td><%= row.isAdmin ? 'Administrador' : 'Usuario' %></td>
+                      <td><%= row.externalLogin || '-' %></td>
+                      <td>
+                        <span class="mapping-pill <%= row.hasMapping ? 'is-success' : 'is-warning' %>">
+                          <%= row.hasMapping ? 'Mapeado' : 'Pendente' %>
+                        </span>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </article>
+      <% }) %>
+    </section>
+  <% } %>
+</main>
+
+<%- include('partials/foot') %>

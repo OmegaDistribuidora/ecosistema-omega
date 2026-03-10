@@ -845,6 +845,64 @@ fieldset {
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
 }
 
+.mapping-grid {
+  width: min(1160px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+}
+
+.mapping-card {
+  gap: 14px;
+}
+
+.mapping-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.mapping-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mapping-stat,
+.mapping-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid rgba(119, 154, 235, 0.35);
+  background: rgba(29, 79, 215, 0.14);
+  color: #dbe8ff;
+}
+
+.mapping-stat.is-success,
+.mapping-pill.is-success {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.42);
+  color: #cbffe9;
+}
+
+.mapping-stat.is-warning,
+.mapping-pill.is-warning {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.46);
+  color: #ffe2b2;
+}
+
+.mapping-table td:last-child,
+.mapping-table th:last-child {
+  width: 120px;
+}
+
 .compact-list {
   display: grid;
   gap: 8px;
@@ -1070,6 +1128,14 @@ fieldset {
 
   .system-edit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mapping-card-header {
+    flex-direction: column;
+  }
+
+  .mapping-stats {
+    justify-content: flex-start;
   }
 
   .check-inline {
