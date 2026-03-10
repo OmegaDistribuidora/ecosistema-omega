@@ -55,6 +55,46 @@ function normalizeIdArray(rawIds) {
   return [...new Set(ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
 }
 
+function normalizeSsoKey(value) {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+  return normalized || null;
+}
+
+function normalizeUserSystemLinks(rawLinks, allowedSystemIds = []) {
+  const allowedIds = new Set(normalizeIdArray(allowedSystemIds));
+  const links = Array.isArray(rawLinks) ? rawLinks : [];
+  const deduped = new Map();
+
+  for (const item of links) {
+    const systemId = Number(item && item.systemId);
+    const externalLogin = String((item && item.externalLogin) || '').trim();
+
+    if (!Number.isInteger(systemId) || systemId <= 0) {
+      continue;
+    }
+
+    if (allowedIds.size && !allowedIds.has(systemId)) {
+      continue;
+    }
+
+    if (!externalLogin) {
+      continue;
+    }
+
+    deduped.set(systemId, {
+      systemId,
+      externalLogin
+    });
+  }
+
+  return Array.from(deduped.values()).sort((a, b) => a.systemId - b.systemId);
+}
+
 function buildPgSsl() {
   if (process.env.DATABASE_SSL === 'false') {
     return false;
@@ -90,6 +130,8 @@ async function initializePostgres() {
       url TEXT NOT NULL,
       description TEXT,
       preview_image_url TEXT,
+      sso_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      sso_key TEXT,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -97,6 +139,14 @@ async function initializePostgres() {
     CREATE TABLE IF NOT EXISTS user_system_access (
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       system_id INTEGER NOT NULL REFERENCES systems(id) ON DELETE CASCADE,
+      PRIMARY KEY (user_id, system_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_system_links (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      system_id INTEGER NOT NULL REFERENCES systems(id) ON DELETE CASCADE,
+      external_login TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (user_id, system_id)
     );
 
@@ -115,6 +165,12 @@ async function initializePostgres() {
 
   await pgPool.query(
     'ALTER TABLE systems ADD COLUMN IF NOT EXISTS preview_image_url TEXT'
+  );
+  await pgPool.query(
+    'ALTER TABLE systems ADD COLUMN IF NOT EXISTS sso_enabled BOOLEAN NOT NULL DEFAULT FALSE'
+  );
+  await pgPool.query(
+    'ALTER TABLE systems ADD COLUMN IF NOT EXISTS sso_key TEXT'
   );
 
   for (const [key, value] of Object.entries(defaultSettings)) {
@@ -182,6 +238,8 @@ function initializeSqlite() {
       url TEXT NOT NULL,
       description TEXT,
       preview_image_url TEXT,
+      sso_enabled INTEGER NOT NULL DEFAULT 0,
+      sso_key TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -189,6 +247,16 @@ function initializeSqlite() {
     CREATE TABLE IF NOT EXISTS user_system_access (
       user_id INTEGER NOT NULL,
       system_id INTEGER NOT NULL,
+      PRIMARY KEY (user_id, system_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (system_id) REFERENCES systems(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_system_links (
+      user_id INTEGER NOT NULL,
+      system_id INTEGER NOT NULL,
+      external_login TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (user_id, system_id),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (system_id) REFERENCES systems(id) ON DELETE CASCADE
@@ -213,6 +281,14 @@ function initializeSqlite() {
   const hasPreviewColumn = systemColumns.some((column) => column.name === 'preview_image_url');
   if (!hasPreviewColumn) {
     sqliteDb.exec('ALTER TABLE systems ADD COLUMN preview_image_url TEXT');
+  }
+  const hasSsoEnabledColumn = systemColumns.some((column) => column.name === 'sso_enabled');
+  if (!hasSsoEnabledColumn) {
+    sqliteDb.exec('ALTER TABLE systems ADD COLUMN sso_enabled INTEGER NOT NULL DEFAULT 0');
+  }
+  const hasSsoKeyColumn = systemColumns.some((column) => column.name === 'sso_key');
+  if (!hasSsoKeyColumn) {
+    sqliteDb.exec('ALTER TABLE systems ADD COLUMN sso_key TEXT');
   }
 
   const insertSetting = sqliteDb.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
@@ -384,7 +460,70 @@ async function listUsersBasic() {
     .all();
 }
 
-async function createUser({ username, password, isAdmin, systemIds }) {
+async function listAllUserSystemLinks() {
+  if (isPostgres) {
+    const result = await pgPool.query(`
+      SELECT
+        l.user_id,
+        l.system_id,
+        l.external_login,
+        s.name AS system_name
+      FROM user_system_links l
+      INNER JOIN systems s ON s.id = l.system_id
+      ORDER BY l.user_id ASC, s.name ASC
+    `);
+    return result.rows;
+  }
+
+  return sqliteDb
+    .prepare(`
+      SELECT
+        l.user_id,
+        l.system_id,
+        l.external_login,
+        s.name AS system_name
+      FROM user_system_links l
+      INNER JOIN systems s ON s.id = l.system_id
+      ORDER BY l.user_id ASC, s.name ASC
+    `)
+    .all();
+}
+
+async function findUserSystemLink(userId, systemId) {
+  const safeUserId = Number(userId);
+  const safeSystemId = Number(systemId);
+
+  if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+    return null;
+  }
+  if (!Number.isInteger(safeSystemId) || safeSystemId <= 0) {
+    return null;
+  }
+
+  if (isPostgres) {
+    const result = await pgPool.query(
+      `SELECT user_id, system_id, external_login
+       FROM user_system_links
+       WHERE user_id = $1 AND system_id = $2
+       LIMIT 1`,
+      [safeUserId, safeSystemId]
+    );
+    return result.rows[0] || null;
+  }
+
+  return (
+    sqliteDb
+      .prepare(
+        `SELECT user_id, system_id, external_login
+         FROM user_system_links
+         WHERE user_id = ? AND system_id = ?
+         LIMIT 1`
+      )
+      .get(safeUserId, safeSystemId) || null
+  );
+}
+
+async function createUser({ username, password, isAdmin, systemIds, systemLinks }) {
   if (isPostgres) {
     const client = await pgPool.connect();
     try {
@@ -407,6 +546,17 @@ async function createUser({ username, password, isAdmin, systemIds }) {
         await client.query(
           'INSERT INTO user_system_access (user_id, system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
           [userId, systemId]
+        );
+      }
+
+      const safeLinks = normalizeUserSystemLinks(systemLinks, allowedSystemIds);
+      for (const link of safeLinks) {
+        await client.query(
+          `INSERT INTO user_system_links (user_id, system_id, external_login)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id, system_id)
+           DO UPDATE SET external_login = EXCLUDED.external_login, updated_at = NOW()`,
+          [userId, link.systemId, link.externalLogin]
         );
       }
 
@@ -437,17 +587,29 @@ async function createUser({ username, password, isAdmin, systemIds }) {
     const grant = sqliteDb.prepare(
       'INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)'
     );
+    const upsertLink = sqliteDb.prepare(`
+      INSERT INTO user_system_links (user_id, system_id, external_login, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id, system_id) DO UPDATE SET
+        external_login = excluded.external_login,
+        updated_at = CURRENT_TIMESTAMP
+    `);
     for (const systemId of ids) {
       grant.run(userId, systemId);
+    }
+
+    const safeLinks = normalizeUserSystemLinks(payload.systemLinks, ids);
+    for (const link of safeLinks) {
+      upsertLink.run(userId, link.systemId, link.externalLogin);
     }
 
     return userId;
   });
 
-  return tx({ username, password, isAdmin, systemIds });
+  return tx({ username, password, isAdmin, systemIds, systemLinks });
 }
 
-async function updateUser({ userId, username, password, isAdmin, systemIds }) {
+async function updateUser({ userId, username, password, isAdmin, systemIds, systemLinks }) {
   const ids = normalizeIdArray(systemIds);
 
   if (isPostgres) {
@@ -483,6 +645,18 @@ async function updateUser({ userId, username, password, isAdmin, systemIds }) {
         );
       }
 
+      await client.query('DELETE FROM user_system_links WHERE user_id = $1', [userId]);
+      const safeLinks = normalizeUserSystemLinks(systemLinks, finalIds);
+      for (const link of safeLinks) {
+        await client.query(
+          `INSERT INTO user_system_links (user_id, system_id, external_login)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id, system_id)
+           DO UPDATE SET external_login = EXCLUDED.external_login, updated_at = NOW()`,
+          [userId, link.systemId, link.externalLogin]
+        );
+      }
+
       await client.query('COMMIT');
       return true;
     } catch (error) {
@@ -511,6 +685,7 @@ async function updateUser({ userId, username, password, isAdmin, systemIds }) {
     }
 
     sqliteDb.prepare('DELETE FROM user_system_access WHERE user_id = ?').run(payload.userId);
+    sqliteDb.prepare('DELETE FROM user_system_links WHERE user_id = ?').run(payload.userId);
     const finalIds = payload.isAdmin
       ? sqliteDb
           .prepare('SELECT id FROM systems WHERE is_active = 1')
@@ -521,14 +696,26 @@ async function updateUser({ userId, username, password, isAdmin, systemIds }) {
     const grant = sqliteDb.prepare(
       'INSERT OR IGNORE INTO user_system_access (user_id, system_id) VALUES (?, ?)'
     );
+    const upsertLink = sqliteDb.prepare(`
+      INSERT INTO user_system_links (user_id, system_id, external_login, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id, system_id) DO UPDATE SET
+        external_login = excluded.external_login,
+        updated_at = CURRENT_TIMESTAMP
+    `);
     for (const systemId of finalIds) {
       grant.run(payload.userId, systemId);
+    }
+
+    const safeLinks = normalizeUserSystemLinks(payload.systemLinks, finalIds);
+    for (const link of safeLinks) {
+      upsertLink.run(payload.userId, link.systemId, link.externalLogin);
     }
 
     return true;
   });
 
-  return tx({ userId, username, password, isAdmin, systemIds: ids });
+  return tx({ userId, username, password, isAdmin, systemIds: ids, systemLinks });
 }
 
 async function updateUserSystemAccess(userId, systemIds) {
@@ -586,18 +773,27 @@ async function listSystems({ includeInactive = true } = {}) {
     .all();
 }
 
-async function createSystem({ name, url, description, previewImageUrl, allowedUserIds }) {
+async function createSystem({
+  name,
+  url,
+  description,
+  previewImageUrl,
+  allowedUserIds,
+  ssoEnabled,
+  ssoKey
+}) {
   const safeUserIds = normalizeIdArray(allowedUserIds);
+  const safeSsoKey = normalizeSsoKey(ssoKey);
 
   if (isPostgres) {
     const client = await pgPool.connect();
     try {
       await client.query('BEGIN');
       const inserted = await client.query(
-        `INSERT INTO systems (name, url, description, preview_image_url, is_active)
-         VALUES ($1, $2, $3, $4, TRUE)
+        `INSERT INTO systems (name, url, description, preview_image_url, sso_enabled, sso_key, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE)
          RETURNING id`,
-        [name, url, description || null, previewImageUrl || null]
+        [name, url, description || null, previewImageUrl || null, Boolean(ssoEnabled), safeSsoKey]
       );
 
       const systemId = inserted.rows[0].id;
@@ -627,10 +823,17 @@ async function createSystem({ name, url, description, previewImageUrl, allowedUs
   const tx = sqliteDb.transaction((payload) => {
     const result = sqliteDb
       .prepare(
-        `INSERT INTO systems (name, url, description, preview_image_url, is_active)
-         VALUES (?, ?, ?, ?, 1)`
+        `INSERT INTO systems (name, url, description, preview_image_url, sso_enabled, sso_key, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, 1)`
       )
-      .run(payload.name, payload.url, payload.description || null, payload.previewImageUrl || null);
+      .run(
+        payload.name,
+        payload.url,
+        payload.description || null,
+        payload.previewImageUrl || null,
+        payload.ssoEnabled ? 1 : 0,
+        payload.ssoKey
+      );
 
     const systemId = Number(result.lastInsertRowid);
     const admins = sqliteDb
@@ -650,19 +853,31 @@ async function createSystem({ name, url, description, previewImageUrl, allowedUs
     return systemId;
   });
 
-  return tx({ name, url, description, previewImageUrl, allowedUserIds: safeUserIds });
+  return tx({
+    name,
+    url,
+    description,
+    previewImageUrl,
+    allowedUserIds: safeUserIds,
+    ssoEnabled: Boolean(ssoEnabled),
+    ssoKey: safeSsoKey
+  });
 }
 
-async function updateSystem(systemId, { name, url, description, previewImageUrl }) {
+async function updateSystem(systemId, { name, url, description, previewImageUrl, ssoEnabled, ssoKey }) {
+  const safeSsoKey = normalizeSsoKey(ssoKey);
+
   if (isPostgres) {
     const result = await pgPool.query(
       `UPDATE systems
        SET name = $2,
            url = $3,
            description = $4,
-           preview_image_url = $5
+           preview_image_url = $5,
+           sso_enabled = $6,
+           sso_key = $7
        WHERE id = $1`,
-      [systemId, name, url, description || null, previewImageUrl || null]
+      [systemId, name, url, description || null, previewImageUrl || null, Boolean(ssoEnabled), safeSsoKey]
     );
     return result.rowCount > 0;
   }
@@ -673,10 +888,12 @@ async function updateSystem(systemId, { name, url, description, previewImageUrl 
        SET name = ?,
            url = ?,
            description = ?,
-           preview_image_url = ?
+           preview_image_url = ?,
+           sso_enabled = ?,
+           sso_key = ?
        WHERE id = ?`
     )
-    .run(name, url, description || null, previewImageUrl || null, systemId);
+    .run(name, url, description || null, previewImageUrl || null, ssoEnabled ? 1 : 0, safeSsoKey, systemId);
   return result.changes > 0;
 }
 
@@ -794,6 +1011,8 @@ module.exports = {
   findUserById,
   listUsers,
   listUsersBasic,
+  listAllUserSystemLinks,
+  findUserSystemLink,
   createUser,
   updateUser,
   updateUserSystemAccess,

@@ -57,6 +57,25 @@
           </div>
         </fieldset>
 
+        <% const ssoSystems = systems.filter((system) => system.sso_enabled); %>
+        <% if (ssoSystems.length) { %>
+          <fieldset>
+            <legend>Login por sistema (SSO delegado)</legend>
+            <div class="form-stack compact">
+              <% ssoSystems.forEach((system) => { %>
+                <label>
+                  <%= system.name %>
+                  <input
+                    type="text"
+                    name="sso_login_<%= system.id %>"
+                    placeholder="login usado dentro deste sistema"
+                  />
+                </label>
+              <% }) %>
+            </div>
+          </fieldset>
+        <% } %>
+
         <button type="submit" class="btn btn-primary">Criar Usuario</button>
       </form>
     </article>
@@ -80,6 +99,7 @@
               data-username="<%= user.username %>"
               data-is-admin="<%= user.is_admin ? '1' : '0' %>"
               data-system-ids="<%= user.system_ids || '' %>"
+              data-sso-mappings="<%= encodeURIComponent(JSON.stringify(user.ssoMappings || [])) %>"
               title="Editar usuario"
             >
               &#9998;
@@ -117,6 +137,25 @@
             <% }) %>
           </div>
         </fieldset>
+
+        <% if (ssoSystems.length) { %>
+          <fieldset>
+            <legend>Login por sistema (SSO delegado)</legend>
+            <div class="form-stack compact">
+              <% ssoSystems.forEach((system) => { %>
+                <label>
+                  <%= system.name %>
+                  <input
+                    type="text"
+                    name="sso_login_<%= system.id %>"
+                    data-user-sso-login="<%= system.id %>"
+                    placeholder="login usado dentro deste sistema"
+                  />
+                </label>
+              <% }) %>
+            </div>
+          </fieldset>
+        <% } %>
 
         <div class="form-actions-inline">
           <button type="submit" class="btn btn-primary">Salvar Alteracoes</button>

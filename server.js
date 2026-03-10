@@ -1,8 +1,10 @@
 ﻿const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const SQLiteStore = require('connect-sqlite3')(session);
 
@@ -12,12 +14,14 @@ const {
   findUserById,
   listUsers,
   listUsersBasic,
+  listAllUserSystemLinks,
   createUser,
   updateUser,
   listSystems,
   createSystem,
   updateSystem,
   getUserAccessibleSystems,
+  findUserSystemLink,
   registerHistoryEntry,
   listHistory,
   getSettings,
@@ -212,6 +216,94 @@ function parseIds(raw) {
 function normalizeSystemUrl(rawUrl) {
   const value = String(rawUrl || '').trim();
   return /^https?:\/\//i.test(value) ? value : null;
+}
+
+function normalizeSsoEnvKey(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase();
+}
+
+function parseUserSystemLinks(body) {
+  const links = [];
+  for (const [key, rawValue] of Object.entries(body || {})) {
+    const match = key.match(/^sso_login_(\d+)$/);
+    if (!match) {
+      continue;
+    }
+
+    const systemId = Number(match[1]);
+    const externalLogin = String(rawValue || '').trim();
+    if (!Number.isInteger(systemId) || systemId <= 0 || !externalLogin) {
+      continue;
+    }
+
+    links.push({
+      systemId,
+      externalLogin
+    });
+  }
+  return links;
+}
+
+function getSystemSsoConfig(system) {
+  if (!system || !system.sso_enabled || !system.sso_key) {
+    return null;
+  }
+
+  const envKey = normalizeSsoEnvKey(system.sso_key);
+  if (!envKey) {
+    return null;
+  }
+
+  const secret = String(process.env[`SSO_SECRET_${envKey}`] || '').trim();
+  if (!secret) {
+    return null;
+  }
+
+  const ttlRaw = Number(process.env[`SSO_TTL_${envKey}`] || process.env.SSO_TOKEN_TTL || 45);
+  return {
+    issuer: String(process.env.SSO_ISSUER || 'ecosistema-omega').trim(),
+    audience: String(process.env[`SSO_AUDIENCE_${envKey}`] || system.sso_key).trim(),
+    secret,
+    ttlSeconds: Number.isFinite(ttlRaw) ? Math.max(15, Math.min(300, ttlRaw)) : 45
+  };
+}
+
+function buildSsoRedirectUrl(targetUrl, token) {
+  const url = new URL(targetUrl);
+  url.hash = new URLSearchParams({ sso: token }).toString();
+  return url.toString();
+}
+
+function buildUserLinksIndex(rows) {
+  const index = {};
+
+  for (const row of rows || []) {
+    const userId = Number(row.user_id);
+    const systemId = Number(row.system_id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      continue;
+    }
+    if (!Number.isInteger(systemId) || systemId <= 0) {
+      continue;
+    }
+
+    if (!index[userId]) {
+      index[userId] = [];
+    }
+
+    index[userId].push({
+      systemId,
+      externalLogin: row.external_login,
+      systemName: row.system_name || ''
+    });
+  }
+
+  return index;
 }
 
 async function fetchWithTimeout(url, method = 'HEAD') {
@@ -440,7 +532,35 @@ app.get('/go/:systemId', requireAuth, async (req, res, next) => {
       console.warn('Falha ao registrar historico de acesso:', historyError.message);
     }
 
-    res.redirect(selectedSystem.url);
+    const ssoConfig = getSystemSsoConfig(selectedSystem);
+    if (!ssoConfig) {
+      return res.redirect(selectedSystem.url);
+    }
+
+    const systemLink = await findUserSystemLink(user.id, systemId);
+    if (!systemLink || !String(systemLink.external_login || '').trim()) {
+      return res.redirect(selectedSystem.url);
+    }
+
+    const handoffToken = jwt.sign(
+      {
+        ecosystemUserId: Number(user.id),
+        ecosystemUsername: user.username,
+        targetLogin: systemLink.external_login,
+        systemId
+      },
+      ssoConfig.secret,
+      {
+        algorithm: 'HS256',
+        audience: ssoConfig.audience,
+        issuer: ssoConfig.issuer,
+        subject: String(user.id),
+        jwtid: crypto.randomUUID(),
+        expiresIn: `${ssoConfig.ttlSeconds}s`
+      }
+    );
+
+    return res.redirect(buildSsoRedirectUrl(selectedSystem.url, handoffToken));
   } catch (error) {
     next(error);
   }
@@ -466,10 +586,15 @@ app.get('/admin', requireAuth, requireAdmin, async (req, res, next) => {
 
 app.get('/admin/users', requireAuth, requireAdmin, async (req, res, next) => {
   try {
+    const users = await listUsers();
+    const userLinksIndex = buildUserLinksIndex(await listAllUserSystemLinks());
     res.render('admin-users', {
       title: 'Gerenciar Usuarios',
       flash: getFlash(req),
-      users: await listUsers(),
+      users: users.map((user) => ({
+        ...user,
+        ssoMappings: userLinksIndex[Number(user.id)] || []
+      })),
       systems: await listSystems({ includeInactive: true })
     });
   } catch (error) {
@@ -512,6 +637,7 @@ app.post('/admin/users', requireAuth, requireAdmin, async (req, res, next) => {
     const password = String(req.body.password || '');
     const isAdmin = req.body.is_admin === 'on';
     const systemIds = parseIds(req.body.system_ids);
+    const systemLinks = parseUserSystemLinks(req.body);
 
     if (!username || !password) {
       setFlash(req, 'error', 'Usuario e senha sao obrigatorios.');
@@ -524,7 +650,7 @@ app.post('/admin/users', requireAuth, requireAdmin, async (req, res, next) => {
     }
 
     try {
-      await createUser({ username, password, isAdmin, systemIds });
+      await createUser({ username, password, isAdmin, systemIds, systemLinks });
       setFlash(req, 'success', `Usuario ${username} criado com sucesso.`);
     } catch (error) {
       if (String(error.message || '').toUpperCase().includes('UNIQUE')) {
@@ -547,6 +673,7 @@ app.post('/admin/users/:id', requireAuth, requireAdmin, async (req, res, next) =
     const password = String(req.body.password || '');
     const isAdmin = req.body.is_admin === 'on';
     const systemIds = parseIds(req.body.system_ids);
+    const systemLinks = parseUserSystemLinks(req.body);
 
     if (!Number.isInteger(userId) || userId <= 0) {
       setFlash(req, 'error', 'Usuario invalido.');
@@ -569,7 +696,7 @@ app.post('/admin/users/:id', requireAuth, requireAdmin, async (req, res, next) =
     }
 
     try {
-      const updated = await updateUser({ userId, username, password, isAdmin, systemIds });
+      const updated = await updateUser({ userId, username, password, isAdmin, systemIds, systemLinks });
       if (!updated) {
         setFlash(req, 'error', 'Usuario nao encontrado.');
       } else {
@@ -596,6 +723,8 @@ app.post('/admin/systems', requireAuth, requireAdmin, async (req, res, next) => 
     const description = String(req.body.description || '').trim();
     const previewImageUrl = normalizePreviewImageUrl(req.body.preview_image_url);
     const allowedUserIds = parseIds(req.body.user_ids);
+    const ssoEnabled = req.body.sso_enabled === 'on';
+    const ssoKey = String(req.body.sso_key || '').trim();
 
     if (!name || !url) {
       setFlash(req, 'error', 'Nome e link do sistema sao obrigatorios.');
@@ -607,13 +736,26 @@ app.post('/admin/systems', requireAuth, requireAdmin, async (req, res, next) => 
       return res.redirect('/admin/systems');
     }
 
+    if (ssoEnabled && !ssoKey) {
+      setFlash(req, 'error', 'Informe a chave SSO ao habilitar login delegado.');
+      return res.redirect('/admin/systems');
+    }
+
     if (req.body.preview_image_url && !previewImageUrl) {
       setFlash(req, 'error', 'Imagem de preview invalida ou inexistente no volume.');
       return res.redirect('/admin/systems');
     }
 
     try {
-      await createSystem({ name, url, description, previewImageUrl, allowedUserIds });
+      await createSystem({
+        name,
+        url,
+        description,
+        previewImageUrl,
+        allowedUserIds,
+        ssoEnabled,
+        ssoKey
+      });
       setFlash(req, 'success', `Sistema ${name} criado com sucesso.`);
     } catch (error) {
       setFlash(req, 'error', 'Falha ao criar sistema.');
@@ -632,6 +774,8 @@ app.post('/admin/systems/:id', requireAuth, requireAdmin, async (req, res, next)
     const url = String(req.body.url || '').trim();
     const description = String(req.body.description || '').trim();
     const previewImageUrl = normalizePreviewImageUrl(req.body.preview_image_url);
+    const ssoEnabled = req.body.sso_enabled === 'on';
+    const ssoKey = String(req.body.sso_key || '').trim();
 
     if (!Number.isInteger(systemId) || systemId <= 0) {
       setFlash(req, 'error', 'Sistema invalido.');
@@ -648,12 +792,24 @@ app.post('/admin/systems/:id', requireAuth, requireAdmin, async (req, res, next)
       return res.redirect('/admin/systems');
     }
 
+    if (ssoEnabled && !ssoKey) {
+      setFlash(req, 'error', 'Informe a chave SSO ao habilitar login delegado.');
+      return res.redirect('/admin/systems');
+    }
+
     if (req.body.preview_image_url && !previewImageUrl) {
       setFlash(req, 'error', 'Imagem de preview invalida ou inexistente no volume.');
       return res.redirect('/admin/systems');
     }
 
-    const updated = await updateSystem(systemId, { name, url, description, previewImageUrl });
+    const updated = await updateSystem(systemId, {
+      name,
+      url,
+      description,
+      previewImageUrl,
+      ssoEnabled,
+      ssoKey
+    });
     if (!updated) {
       setFlash(req, 'error', 'Sistema nao encontrado.');
       return res.redirect('/admin/systems');

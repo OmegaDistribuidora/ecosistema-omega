@@ -146,6 +146,7 @@
   const usernameInput = form.querySelector('[data-user-field="username"]');
   const isAdminInput = form.querySelector('[data-user-field="is_admin"]');
   const systemOptions = Array.from(form.querySelectorAll('[data-user-system-option]'));
+  const ssoInputs = Array.from(form.querySelectorAll('[data-user-sso-login]'));
   const cancelBtn = form.querySelector('[data-user-edit-cancel]');
 
   function openFor(button) {
@@ -156,6 +157,16 @@
       .split(',')
       .map((value) => Number(value))
       .filter((value) => Number.isInteger(value) && value > 0);
+    let ssoMappings = [];
+    try {
+      const rawMappings = decodeURIComponent(button.dataset.ssoMappings || '');
+      ssoMappings = rawMappings ? JSON.parse(rawMappings) : [];
+    } catch (error) {
+      ssoMappings = [];
+    }
+    const mappingIndex = new Map(
+      (Array.isArray(ssoMappings) ? ssoMappings : []).map((item) => [Number(item.systemId), item.externalLogin || ''])
+    );
 
     form.action = `/admin/users/${id}`;
     if (title) {
@@ -171,6 +182,11 @@
     for (const option of systemOptions) {
       const optionId = Number(option.value);
       option.checked = ids.includes(optionId);
+    }
+
+    for (const input of ssoInputs) {
+      const systemId = Number(input.dataset.userSsoLogin);
+      input.value = mappingIndex.get(systemId) || '';
     }
 
     form.classList.remove('hidden');
@@ -199,6 +215,8 @@
   const nameInput = form.querySelector('[data-system-field="name"]');
   const urlInput = form.querySelector('[data-system-field="url"]');
   const descriptionInput = form.querySelector('[data-system-field="description"]');
+  const ssoEnabledInput = form.querySelector('[data-system-field="sso_enabled"]');
+  const ssoKeyInput = form.querySelector('[data-system-field="sso_key"]');
   const previewSelect = form.querySelector('[data-system-field="preview_image_url"]');
   const cancelBtn = form.querySelector('[data-system-edit-cancel]');
 
@@ -207,6 +225,8 @@
     const name = button.dataset.name || '';
     const url = button.dataset.url || '';
     const description = button.dataset.description || '';
+    const ssoEnabled = button.dataset.ssoEnabled === '1';
+    const ssoKey = button.dataset.ssoKey || '';
     const preview = button.dataset.previewImageUrl || '';
 
     form.action = `/admin/systems/${id}`;
@@ -221,6 +241,12 @@
     }
     if (descriptionInput) {
       descriptionInput.value = description;
+    }
+    if (ssoEnabledInput) {
+      ssoEnabledInput.checked = ssoEnabled;
+    }
+    if (ssoKeyInput) {
+      ssoKeyInput.value = ssoKey;
     }
     if (previewSelect) {
       previewSelect.value = preview;

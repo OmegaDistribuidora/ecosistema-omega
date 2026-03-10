@@ -37,6 +37,10 @@ A aplicacao abre em `http://localhost:3000`.
 - `DATABASE_URL`: conexao Postgres (quando presente, app usa Postgres)
 - `IMAGES_DIR`: caminho do volume de imagens (padrao `/images`)
 - `NODE_ENV=production`
+- `SSO_ISSUER`: emissor do token enviado aos sistemas (padrao `ecosistema-omega`)
+- `SSO_TOKEN_TTL`: validade do token de handoff em segundos (padrao `45`)
+- `SSO_SECRET_<CHAVE>`: segredo compartilhado com cada sistema habilitado para login delegado
+- `SSO_AUDIENCE_<CHAVE>`: audience do token para cada sistema; se omitido, usa a propria chave
 
 ## Deploy no Railway
 
@@ -70,3 +74,18 @@ Tambem e possivel enviar imagens direto no painel admin:
 O sistema carrega os apps externos via `iframe`, mantendo o link do Ecossistema.
 
 Se algum app bloquear incorporacao via `X-Frame-Options` ou `Content-Security-Policy`, ele nao abre no `iframe`. Nesses casos, use o botao "Abrir em nova aba".
+
+## Login delegado
+
+Para cada sistema com login delegado:
+
+- habilite `SSO` no cadastro do sistema
+- defina uma `Chave SSO`, por exemplo `controle_ferias`
+- configure no Railway do Ecossistema `SSO_SECRET_CONTROLE_FERIAS`
+- configure no Railway do sistema alvo o mesmo segredo em `ECOSYSTEM_SSO_SHARED_SECRET`
+- no cadastro do usuario do Ecossistema, informe o login que esse usuario usa dentro do sistema alvo
+
+Exemplos de chaves:
+
+- `controle_ferias` -> `SSO_SECRET_CONTROLE_FERIAS`
+- `controle_atestado` -> `SSO_SECRET_CONTROLE_ATESTADO`

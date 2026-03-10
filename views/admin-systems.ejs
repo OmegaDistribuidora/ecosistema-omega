@@ -45,6 +45,16 @@
           <input type="text" name="description" />
         </label>
 
+        <label class="check-row">
+          <input type="checkbox" name="sso_enabled" />
+          <span>Habilitar login delegado via Ecossistema</span>
+        </label>
+
+        <label>
+          Chave SSO
+          <input type="text" name="sso_key" placeholder="controle_ferias" />
+        </label>
+
         <label>
           Imagem de preview
           <select name="preview_image_url" class="omega-select">
@@ -104,6 +114,7 @@
             <div class="compact-main">
               <strong><%= system.name %></strong>
               <span class="muted small"><%= system.url %></span>
+              <span class="muted small">SSO: <%= system.sso_enabled ? `ativo (${system.sso_key || 'sem chave'})` : 'desligado' %></span>
               <span class="muted small">Preview: <%= system.preview_image_url || 'sem imagem' %></span>
               <span class="muted small">Usuarios: <%= allowedUsers.join(', ') || 'somente admins' %></span>
             </div>
@@ -115,6 +126,8 @@
               data-name="<%= system.name %>"
               data-url="<%= system.url %>"
               data-description="<%= system.description || '' %>"
+              data-sso-enabled="<%= system.sso_enabled ? '1' : '0' %>"
+              data-sso-key="<%= system.sso_key || '' %>"
               data-preview-image-url="<%= system.preview_image_url || '' %>"
               title="Editar sistema"
             >
@@ -140,6 +153,16 @@
         <label>
           Descricao
           <input type="text" name="description" data-system-field="description" />
+        </label>
+
+        <label class="check-row">
+          <input type="checkbox" name="sso_enabled" data-system-field="sso_enabled" />
+          <span>Habilitar login delegado via Ecossistema</span>
+        </label>
+
+        <label>
+          Chave SSO
+          <input type="text" name="sso_key" data-system-field="sso_key" placeholder="controle_ferias" />
         </label>
 
         <label>
