@@ -128,6 +128,23 @@ function buildUploadFileName(customName, originalName) {
   return `${stem}-${Date.now()}${extension}`;
 }
 
+function getUploadedImageUrl(file) {
+  if (!file || !file.filename) {
+    return null;
+  }
+  return `/images/${encodeURIComponent(file.filename)}`;
+}
+
+function runSingleImageUpload(req, res, next, handler) {
+  imageUpload.single('card_image_file')(req, res, (error) => {
+    if (error) {
+      setFlash(req, 'error', error.message || 'Falha no upload da imagem.');
+      return res.redirect(handler.redirectPath);
+    }
+    handler.execute().catch(next);
+  });
+}
+
 const imageUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
@@ -803,110 +820,116 @@ app.post('/admin/users/:id', requireAuth, requireAdmin, async (req, res, next) =
   }
 });
 
-app.post('/admin/systems', requireAuth, requireAdmin, async (req, res, next) => {
-  try {
-    const name = String(req.body.name || '').trim();
-    const url = String(req.body.url || '').trim();
-    const description = String(req.body.description || '').trim();
-    const previewImageUrl = normalizePreviewImageUrl(req.body.preview_image_url);
-    const allowedUserIds = parseIds(req.body.user_ids);
-    const ssoEnabled = req.body.sso_enabled === 'on';
-    const ssoKey = String(req.body.sso_key || '').trim();
+app.post('/admin/systems', requireAuth, requireAdmin, (req, res, next) => {
+  runSingleImageUpload(req, res, next, {
+    redirectPath: '/admin/systems',
+    execute: async () => {
+      const name = String(req.body.name || '').trim();
+      const url = String(req.body.url || '').trim();
+      const description = String(req.body.description || '').trim();
+      const selectedImageUrl = normalizePreviewImageUrl(req.body.preview_image_url);
+      const uploadedImageUrl = getUploadedImageUrl(req.file);
+      const previewImageUrl = uploadedImageUrl || selectedImageUrl;
+      const allowedUserIds = parseIds(req.body.user_ids);
+      const ssoEnabled = req.body.sso_enabled === 'on';
+      const ssoKey = String(req.body.sso_key || '').trim();
 
-    if (!name || !url) {
-      setFlash(req, 'error', 'Nome e link do sistema sao obrigatorios.');
-      return res.redirect('/admin/systems');
+      if (!name || !url) {
+        setFlash(req, 'error', 'Nome e link do sistema sao obrigatorios.');
+        return res.redirect('/admin/systems');
+      }
+
+      if (!/^https?:\/\//i.test(url)) {
+        setFlash(req, 'error', 'Informe uma URL valida com http:// ou https://');
+        return res.redirect('/admin/systems');
+      }
+
+      if (ssoEnabled && !ssoKey) {
+        setFlash(req, 'error', 'Informe a chave SSO ao habilitar login delegado.');
+        return res.redirect('/admin/systems');
+      }
+
+      if (req.body.preview_image_url && !selectedImageUrl && !uploadedImageUrl) {
+        setFlash(req, 'error', 'Imagem do card invalida ou inexistente no volume.');
+        return res.redirect('/admin/systems');
+      }
+
+      try {
+        await createSystem({
+          name,
+          url,
+          description,
+          previewImageUrl,
+          allowedUserIds,
+          ssoEnabled,
+          ssoKey
+        });
+        setFlash(req, 'success', `Sistema ${name} criado com sucesso.`);
+      } catch (error) {
+        setFlash(req, 'error', 'Falha ao criar sistema.');
+      }
+
+      res.redirect('/admin/systems');
     }
+  });
+});
 
-    if (!/^https?:\/\//i.test(url)) {
-      setFlash(req, 'error', 'Informe uma URL valida com http:// ou https://');
-      return res.redirect('/admin/systems');
-    }
+app.post('/admin/systems/:id', requireAuth, requireAdmin, (req, res, next) => {
+  runSingleImageUpload(req, res, next, {
+    redirectPath: '/admin/systems',
+    execute: async () => {
+      const systemId = Number(req.params.id);
+      const name = String(req.body.name || '').trim();
+      const url = String(req.body.url || '').trim();
+      const description = String(req.body.description || '').trim();
+      const selectedImageUrl = normalizePreviewImageUrl(req.body.preview_image_url);
+      const uploadedImageUrl = getUploadedImageUrl(req.file);
+      const previewImageUrl = uploadedImageUrl || selectedImageUrl;
+      const ssoEnabled = req.body.sso_enabled === 'on';
+      const ssoKey = String(req.body.sso_key || '').trim();
 
-    if (ssoEnabled && !ssoKey) {
-      setFlash(req, 'error', 'Informe a chave SSO ao habilitar login delegado.');
-      return res.redirect('/admin/systems');
-    }
+      if (!Number.isInteger(systemId) || systemId <= 0) {
+        setFlash(req, 'error', 'Sistema invalido.');
+        return res.redirect('/admin/systems');
+      }
 
-    if (req.body.preview_image_url && !previewImageUrl) {
-      setFlash(req, 'error', 'Imagem de preview invalida ou inexistente no volume.');
-      return res.redirect('/admin/systems');
-    }
+      if (!name || !url) {
+        setFlash(req, 'error', 'Nome e link do sistema sao obrigatorios.');
+        return res.redirect('/admin/systems');
+      }
 
-    try {
-      await createSystem({
+      if (!/^https?:\/\//i.test(url)) {
+        setFlash(req, 'error', 'Informe uma URL valida com http:// ou https://');
+        return res.redirect('/admin/systems');
+      }
+
+      if (ssoEnabled && !ssoKey) {
+        setFlash(req, 'error', 'Informe a chave SSO ao habilitar login delegado.');
+        return res.redirect('/admin/systems');
+      }
+
+      if (req.body.preview_image_url && !selectedImageUrl && !uploadedImageUrl) {
+        setFlash(req, 'error', 'Imagem do card invalida ou inexistente no volume.');
+        return res.redirect('/admin/systems');
+      }
+
+      const updated = await updateSystem(systemId, {
         name,
         url,
         description,
         previewImageUrl,
-        allowedUserIds,
         ssoEnabled,
         ssoKey
       });
-      setFlash(req, 'success', `Sistema ${name} criado com sucesso.`);
-    } catch (error) {
-      setFlash(req, 'error', 'Falha ao criar sistema.');
+      if (!updated) {
+        setFlash(req, 'error', 'Sistema nao encontrado.');
+        return res.redirect('/admin/systems');
+      }
+
+      setFlash(req, 'success', `Sistema ${name} atualizado com sucesso.`);
+      res.redirect('/admin/systems');
     }
-
-    res.redirect('/admin/systems');
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post('/admin/systems/:id', requireAuth, requireAdmin, async (req, res, next) => {
-  try {
-    const systemId = Number(req.params.id);
-    const name = String(req.body.name || '').trim();
-    const url = String(req.body.url || '').trim();
-    const description = String(req.body.description || '').trim();
-    const previewImageUrl = normalizePreviewImageUrl(req.body.preview_image_url);
-    const ssoEnabled = req.body.sso_enabled === 'on';
-    const ssoKey = String(req.body.sso_key || '').trim();
-
-    if (!Number.isInteger(systemId) || systemId <= 0) {
-      setFlash(req, 'error', 'Sistema invalido.');
-      return res.redirect('/admin/systems');
-    }
-
-    if (!name || !url) {
-      setFlash(req, 'error', 'Nome e link do sistema sao obrigatorios.');
-      return res.redirect('/admin/systems');
-    }
-
-    if (!/^https?:\/\//i.test(url)) {
-      setFlash(req, 'error', 'Informe uma URL valida com http:// ou https://');
-      return res.redirect('/admin/systems');
-    }
-
-    if (ssoEnabled && !ssoKey) {
-      setFlash(req, 'error', 'Informe a chave SSO ao habilitar login delegado.');
-      return res.redirect('/admin/systems');
-    }
-
-    if (req.body.preview_image_url && !previewImageUrl) {
-      setFlash(req, 'error', 'Imagem de preview invalida ou inexistente no volume.');
-      return res.redirect('/admin/systems');
-    }
-
-    const updated = await updateSystem(systemId, {
-      name,
-      url,
-      description,
-      previewImageUrl,
-      ssoEnabled,
-      ssoKey
-    });
-    if (!updated) {
-      setFlash(req, 'error', 'Sistema nao encontrado.');
-      return res.redirect('/admin/systems');
-    }
-
-    setFlash(req, 'success', `Sistema ${name} atualizado com sucesso.`);
-    res.redirect('/admin/systems');
-  } catch (error) {
-    next(error);
-  }
+  });
 });
 
 app.post('/admin/assets/upload', requireAuth, requireAdmin, (req, res, next) => {

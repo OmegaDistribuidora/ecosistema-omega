@@ -6,7 +6,7 @@
       <img src="<%= fixedLogoUrl %>" alt="Omega Distribuidora" class="omega-logo" onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';" />
       <div>
         <h1>Gerenciar Sistemas</h1>
-        <p>Criar e editar sistemas no mesmo painel, com preview local.</p>
+        <p>Criar e editar sistemas no mesmo painel, com imagem de card local.</p>
       </div>
     </div>
 
@@ -30,7 +30,7 @@
   <section class="split-grid">
     <article class="glass-card admin-section">
       <h2 class="section-title">Novo Sistema</h2>
-      <form method="post" action="/admin/systems" class="form-stack compact">
+      <form method="post" action="/admin/systems" enctype="multipart/form-data" class="form-stack compact">
         <label>
           Nome do sistema
           <input type="text" name="name" required />
@@ -57,7 +57,7 @@
         </label>
 
         <label>
-          Imagem de preview
+          Imagem do card (16:9)
           <select name="preview_image_url" class="omega-select">
             <option value="">Sem imagem</option>
             <% (uploadedImages || []).forEach((asset) => { %>
@@ -65,6 +65,11 @@
             <% }) %>
           </select>
         </label>
+        <label>
+          Ou envie uma nova imagem do card
+          <input type="file" name="card_image_file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg" />
+        </label>
+        <p class="muted small">Use uma imagem horizontal em proporção 16:9. Se enviar um arquivo novo, ele substitui a seleção acima.</p>
 
         <fieldset>
           <legend>Usuarios com acesso inicial</legend>
@@ -82,22 +87,6 @@
 
         <button type="submit" class="btn btn-primary">Adicionar Sistema</button>
       </form>
-
-      <div class="upload-box">
-        <h3>Upload de imagens para preview</h3>
-        <form method="post" action="/admin/assets/upload" enctype="multipart/form-data" class="form-stack compact">
-          <label>
-            Nome do arquivo (opcional)
-            <input type="text" name="custom_name" placeholder="preview-financeiro" />
-          </label>
-          <label>
-            Arquivo de imagem
-            <input type="file" name="image_file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg" required />
-          </label>
-          <button type="submit" class="btn btn-primary">Enviar Imagem</button>
-          <p class="muted small">Pasta de destino: <code><%= imagesDir %></code></p>
-        </form>
-      </div>
     </article>
 
     <article class="glass-card admin-section">
@@ -116,7 +105,7 @@
               <strong><%= system.name %></strong>
               <span class="muted small"><%= system.url %></span>
               <span class="muted small">SSO: <%= system.sso_enabled ? `ativo (${system.sso_key || 'sem chave'})` : 'desligado' %></span>
-              <span class="muted small">Preview: <%= system.preview_image_url || 'sem imagem' %></span>
+              <span class="muted small">Imagem do card: <%= system.preview_image_url || 'sem imagem' %></span>
               <span class="muted small">Usuarios: <%= allowedUsers.join(', ') || 'somente admins' %></span>
             </div>
             <button
@@ -138,7 +127,7 @@
         <% }) %>
       </div>
 
-      <form method="post" action="/admin/systems/0" class="form-stack compact hidden" data-system-edit-form>
+      <form method="post" action="/admin/systems/0" enctype="multipart/form-data" class="form-stack compact hidden" data-system-edit-form>
         <h3 data-system-edit-title>Editar Sistema</h3>
 
         <label>
@@ -167,7 +156,7 @@
         </label>
 
         <label>
-          Imagem de preview
+          Imagem do card (16:9)
           <select name="preview_image_url" class="omega-select" data-system-field="preview_image_url">
             <option value="">Sem imagem</option>
             <% (uploadedImages || []).forEach((asset) => { %>
@@ -175,6 +164,11 @@
             <% }) %>
           </select>
         </label>
+        <label>
+          Ou envie uma nova imagem do card
+          <input type="file" name="card_image_file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg" />
+        </label>
+        <p class="muted small">Se enviar um novo arquivo, ele passa a ser usado no card deste sistema.</p>
 
         <div class="form-actions-inline">
           <button type="submit" class="btn btn-primary">Salvar Alteracoes</button>
@@ -182,17 +176,23 @@
         </div>
       </form>
 
-      <div class="assets-grid">
-        <% (uploadedImages || []).forEach((asset) => { %>
-          <article class="asset-card compact-asset">
-            <img src="<%= asset.url %>" alt="<%= asset.name %>" loading="lazy" />
-            <div class="asset-meta">
-              <strong><%= asset.name %></strong>
-              <input type="text" readonly value="<%= asset.url %>" onclick="this.select()" />
-            </div>
-          </article>
-        <% }) %>
-      </div>
+      <details class="image-library-toggle">
+        <summary class="btn btn-ghost">Mostrar todas as imagens</summary>
+        <div class="image-library-body">
+          <p class="muted small">Pasta de destino: <code><%= imagesDir %></code></p>
+          <div class="assets-grid">
+            <% (uploadedImages || []).forEach((asset) => { %>
+              <article class="asset-card compact-asset">
+                <img src="<%= asset.url %>" alt="<%= asset.name %>" loading="lazy" />
+                <div class="asset-meta">
+                  <strong><%= asset.name %></strong>
+                  <input type="text" readonly value="<%= asset.url %>" onclick="this.select()" />
+                </div>
+              </article>
+            <% }) %>
+          </div>
+        </div>
+      </details>
     </article>
   </section>
 </main>
