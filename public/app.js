@@ -10,13 +10,23 @@
   const submitBtn = form.querySelector('[data-login-submit]');
   const submitLabel = form.querySelector('[data-submit-label]');
   const submitSpinner = form.querySelector('[data-submit-spinner]');
+  const eyeOpenIcon = form.querySelector('[data-eye-open]');
+  const eyeClosedIcon = form.querySelector('[data-eye-closed]');
+  const toggleLabel = form.querySelector('[data-toggle-label]');
 
   if (passwordInput && togglePasswordBtn) {
     togglePasswordBtn.addEventListener('click', () => {
       const isPassword = passwordInput.type === 'password';
       passwordInput.type = isPassword ? 'text' : 'password';
-      togglePasswordBtn.textContent = isPassword ? 'Ocultar' : 'Mostrar';
       togglePasswordBtn.setAttribute('aria-label', isPassword ? 'Ocultar senha' : 'Mostrar senha');
+      togglePasswordBtn.setAttribute('aria-pressed', isPassword ? 'true' : 'false');
+      if (toggleLabel) {
+        toggleLabel.textContent = isPassword ? 'Ocultar senha' : 'Mostrar senha';
+      }
+      if (eyeOpenIcon && eyeClosedIcon) {
+        eyeOpenIcon.classList.toggle('hidden', isPassword);
+        eyeClosedIcon.classList.toggle('hidden', !isPassword);
+      }
       passwordInput.focus();
     });
 
