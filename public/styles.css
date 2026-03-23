@@ -609,11 +609,122 @@ fieldset {
   color: #def8ff;
 }
 
-.systems-card-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 20px;
+.systems-carousel {
+  position: relative;
+  padding: 12px 54px 8px;
+}
+
+.carousel-viewport {
+  overflow: hidden;
+  padding: 26px 22px 30px;
+  touch-action: pan-y pinch-zoom;
+}
+
+.carousel-track {
+  display: flex;
   align-items: stretch;
+  gap: 18px;
+  transition: transform 0.42s ease;
+  will-change: transform;
+}
+
+.carousel-slide {
+  flex: 0 0 clamp(180px, 18vw, 228px);
+  transform-origin: center center;
+  transition:
+    transform 0.32s ease,
+    opacity 0.32s ease,
+    filter 0.32s ease;
+  transform: scale(0.78);
+  opacity: 0.28;
+  filter: blur(0.6px);
+}
+
+.carousel-slide.is-prev,
+.carousel-slide.is-next {
+  transform: scale(0.88);
+  opacity: 0.62;
+  filter: blur(0);
+}
+
+.carousel-slide.is-prev-2,
+.carousel-slide.is-next-2 {
+  transform: scale(0.81);
+  opacity: 0.4;
+  filter: blur(0);
+}
+
+.carousel-slide.is-active {
+  transform: scale(1);
+  opacity: 1;
+  filter: blur(0);
+}
+
+.carousel-slide.is-distant {
+  opacity: 0.08;
+}
+
+.carousel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(119, 154, 235, 0.34);
+  background: rgba(5, 18, 52, 0.88);
+  color: #eef4ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 4;
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.22);
+}
+
+.carousel-nav.prev {
+  left: 0;
+}
+
+.carousel-nav.next {
+  right: 0;
+}
+
+.carousel-nav:hover:not(:disabled) {
+  border-color: rgba(255, 154, 74, 0.7);
+  color: #fff7ef;
+}
+
+.carousel-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.carousel-nav span {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.carousel-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(119, 154, 235, 0.38);
+  cursor: pointer;
+  transition: transform 0.22s ease, background 0.22s ease;
+}
+
+.carousel-dot.is-active {
+  background: var(--omega-orange-400);
+  transform: scale(1.35);
 }
 
 .system-card {
@@ -631,7 +742,9 @@ fieldset {
     box-shadow 0.24s ease;
 }
 
-.system-card:hover {
+.carousel-slide.is-active .system-card:hover,
+.carousel-slide.is-prev .system-card:hover,
+.carousel-slide.is-next .system-card:hover {
   transform: translateY(-6px) scale(1.015);
   border-color: rgba(226, 177, 92, 0.9);
   box-shadow:
@@ -1147,8 +1260,8 @@ fieldset {
 }
 
 @media (max-width: 1040px) {
-  .systems-card-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .carousel-slide {
+    flex-basis: clamp(176px, 24vw, 220px);
   }
 
   .split-grid {
@@ -1157,18 +1270,75 @@ fieldset {
 }
 
 @media (max-width: 860px) {
-  .systems-card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .systems-carousel {
+    padding-inline: 44px;
+  }
+
+  .carousel-slide {
+    flex-basis: clamp(216px, 42vw, 270px);
   }
 }
 
 @media (max-width: 680px) {
-  .systems-card-grid {
-    grid-template-columns: 1fr;
+  .systems-carousel {
+    padding-inline: 0;
+  }
+
+  .carousel-viewport {
+    padding: 18px clamp(12px, 7vw, 32px) 24px;
+  }
+
+  .carousel-track {
+    gap: 14px;
+  }
+
+  .carousel-slide {
+    flex-basis: min(82vw, 320px);
+    transform: scale(0.86);
+    opacity: 0.4;
+  }
+
+  .carousel-slide.is-prev-2,
+  .carousel-slide.is-next-2 {
+    transform: scale(0.84);
+    opacity: 0.24;
+  }
+
+  .carousel-slide.is-prev,
+  .carousel-slide.is-next {
+    transform: scale(0.92);
+    opacity: 0.58;
+  }
+
+  .carousel-slide.is-active {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  .carousel-nav {
+    display: none;
   }
 
   .system-card {
-    min-height: 400px;
+    min-height: 360px;
+  }
+
+  .system-card-body {
+    padding: 18px 16px 16px;
+    gap: 12px;
+  }
+
+  .system-card-body h2 {
+    font-size: clamp(1.15rem, 5vw, 1.5rem);
+  }
+
+  .system-card-body p {
+    font-size: 0.96rem;
+    line-height: 1.45;
+  }
+
+  .carousel-dots {
+    margin-top: 10px;
   }
 }
 

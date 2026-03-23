@@ -37,36 +37,52 @@
     <% if (!systems.length) { %>
       <p class="muted">Sem sistemas liberados para seu usuario.</p>
     <% } else { %>
-      <section class="systems-card-grid">
-        <% systems.forEach((system) => { %>
-          <% const status = (systemStatuses && systemStatuses[system.id]) || { online: false, statusCode: null }; %>
-          <a
-            class="system-card"
-            href="/go/<%= system.id %>"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <div class="system-card-media">
-              <img
-                src="<%= system.preview_image_url || '/public/assets/omega-logo.svg' %>"
-                alt="<%= system.name %>"
-                loading="lazy"
-                onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
-              />
-            </div>
+      <section class="systems-carousel" data-systems-carousel>
+        <button type="button" class="carousel-nav prev" data-carousel-prev aria-label="Card anterior">
+          <span aria-hidden="true">&#8249;</span>
+        </button>
 
-            <div class="system-card-body">
-              <h2><%= system.name %></h2>
-              <p><%= system.description || 'Acessar sistema' %></p>
+        <div class="carousel-viewport" data-carousel-viewport>
+          <div class="carousel-track" data-carousel-track>
+            <% systems.forEach((system, index) => { %>
+              <% const status = (systemStatuses && systemStatuses[system.id]) || { online: false, statusCode: null }; %>
+              <article class="carousel-slide" data-carousel-slide data-slide-index="<%= index %>">
+                <a
+                  class="system-card"
+                  href="/go/<%= system.id %>"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <div class="system-card-media">
+                    <img
+                      src="<%= system.preview_image_url || '/public/assets/omega-logo.svg' %>"
+                      alt="<%= system.name %>"
+                      loading="lazy"
+                      onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
+                    />
+                  </div>
 
-              <div class="system-card-footer">
-                <span class="card-status-badge <%= status.online ? 'is-online' : 'is-offline' %>">
-                  <%= status.online ? 'Online' : 'Offline' %>
-                </span>
-              </div>
-            </div>
-          </a>
-        <% }) %>
+                  <div class="system-card-body">
+                    <h2><%= system.name %></h2>
+                    <p><%= system.description || 'Acessar sistema' %></p>
+
+                    <div class="system-card-footer">
+                      <span class="card-status-badge <%= status.online ? 'is-online' : 'is-offline' %>">
+                        <%= status.online ? 'Online' : 'Offline' %>
+                      </span>
+                    </div>
+                  </div>
+                </a>
+              </article>
+            <% }) %>
+          </div>
+        </div>
+
+        <button type="button" class="carousel-nav next" data-carousel-next aria-label="Próximo card">
+          <span aria-hidden="true">&#8250;</span>
+        </button>
+
+        <div class="carousel-dots" data-carousel-dots aria-label="Selecionar sistema"></div>
       </section>
     <% } %>
   </section>

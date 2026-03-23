@@ -55,6 +55,234 @@
 })();
 
 (function () {
+  const root = document.querySelector('[data-systems-carousel]');
+  if (!root) {
+    return;
+  }
+
+  const viewport = root.querySelector('[data-carousel-viewport]');
+  const track = root.querySelector('[data-carousel-track]');
+  const slides = Array.from(root.querySelectorAll('[data-carousel-slide]'));
+  const prevBtn = root.querySelector('[data-carousel-prev]');
+  const nextBtn = root.querySelector('[data-carousel-next]');
+  const dotsWrap = root.querySelector('[data-carousel-dots]');
+
+  if (!viewport || !track || !slides.length) {
+    return;
+  }
+
+  let activeIndex = 0;
+  let touchStartX = null;
+  let edgeDirection = 0;
+  let edgeTimer = null;
+
+  const EDGE_THRESHOLD_PX = 96;
+  const EDGE_THRESHOLD_RATIO = 0.14;
+  const EDGE_SCROLL_DELAY_MS = 650;
+
+  function clampIndex(index) {
+    return Math.max(0, Math.min(slides.length - 1, index));
+  }
+
+  function createDots() {
+    if (!dotsWrap) {
+      return [];
+    }
+
+    return slides.map((_, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'carousel-dot';
+      button.setAttribute('aria-label', `Ir para card ${index + 1}`);
+      button.addEventListener('click', () => {
+        activeIndex = index;
+        render();
+      });
+      dotsWrap.appendChild(button);
+      return button;
+    });
+  }
+
+  const dots = createDots();
+
+  function updateTrackPosition() {
+    const activeSlide = slides[activeIndex];
+    if (!activeSlide) {
+      return;
+    }
+
+    const viewportStyles = window.getComputedStyle(viewport);
+    const viewportPaddingLeft = Number.parseFloat(viewportStyles.paddingLeft || '0') || 0;
+    const viewportPaddingRight = Number.parseFloat(viewportStyles.paddingRight || '0') || 0;
+    const viewportWidth = viewport.clientWidth - viewportPaddingLeft - viewportPaddingRight;
+    const trackWidth = track.scrollWidth;
+    const slideOffset = activeSlide.offsetLeft;
+    const slideWidth = activeSlide.offsetWidth;
+    const target = slideOffset - (viewportWidth - slideWidth) / 2;
+    const maxTranslate = Math.max(trackWidth - viewportWidth, 0);
+    const translate = Math.max(0, Math.min(target, maxTranslate));
+
+    track.style.transform = `translateX(${-translate}px)`;
+  }
+
+  function clearEdgeTimer() {
+    if (edgeTimer) {
+      clearTimeout(edgeTimer);
+      edgeTimer = null;
+    }
+  }
+
+  function scheduleEdgeScroll() {
+    clearEdgeTimer();
+
+    if (!edgeDirection) {
+      return;
+    }
+
+    edgeTimer = setTimeout(() => {
+      edgeTimer = null;
+
+      if (!edgeDirection) {
+        return;
+      }
+
+      const nextIndex = clampIndex(activeIndex + edgeDirection);
+      if (nextIndex !== activeIndex) {
+        activeIndex = nextIndex;
+        render();
+      }
+
+      if (edgeDirection) {
+        scheduleEdgeScroll();
+      }
+    }, EDGE_SCROLL_DELAY_MS);
+  }
+
+  function render() {
+    slides.forEach((slide, index) => {
+      slide.classList.toggle('is-active', index === activeIndex);
+      slide.classList.toggle('is-prev', index === activeIndex - 1);
+      slide.classList.toggle('is-next', index === activeIndex + 1);
+      slide.classList.toggle('is-prev-2', index === activeIndex - 2);
+      slide.classList.toggle('is-next-2', index === activeIndex + 2);
+      slide.classList.toggle('is-distant', Math.abs(index - activeIndex) > 2);
+    });
+
+    dots.forEach((dot, index) => {
+      dot.classList.toggle('is-active', index === activeIndex);
+      dot.setAttribute('aria-pressed', index === activeIndex ? 'true' : 'false');
+    });
+
+    if (prevBtn) {
+      prevBtn.disabled = activeIndex === 0;
+    }
+    if (nextBtn) {
+      nextBtn.disabled = activeIndex === slides.length - 1;
+    }
+
+    updateTrackPosition();
+  }
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      activeIndex = clampIndex(activeIndex - 1);
+      render();
+    });
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      activeIndex = clampIndex(activeIndex + 1);
+      render();
+    });
+  }
+
+  slides.forEach((slide, index) => {
+    const link = slide.querySelector('.system-card');
+
+    slide.addEventListener('focusin', () => {
+      activeIndex = index;
+      render();
+    });
+
+    if (link) {
+      link.addEventListener('pointerdown', () => {
+        link.dataset.wasActiveOnPointerDown = index === activeIndex ? 'true' : 'false';
+      });
+
+      link.addEventListener('click', (event) => {
+        const wasActiveOnPointerDown = link.dataset.wasActiveOnPointerDown === 'true';
+        delete link.dataset.wasActiveOnPointerDown;
+
+        if (!wasActiveOnPointerDown) {
+          event.preventDefault();
+          activeIndex = index;
+          render();
+        }
+      });
+    }
+  });
+
+  viewport.addEventListener('touchstart', (event) => {
+    touchStartX = event.changedTouches[0].clientX;
+  }, { passive: true });
+
+  viewport.addEventListener('touchend', (event) => {
+    if (touchStartX === null) {
+      return;
+    }
+
+    const touchEndX = event.changedTouches[0].clientX;
+    const delta = touchEndX - touchStartX;
+    touchStartX = null;
+
+    if (Math.abs(delta) < 40) {
+      return;
+    }
+
+    activeIndex = clampIndex(activeIndex + (delta < 0 ? 1 : -1));
+    render();
+  }, { passive: true });
+
+  viewport.addEventListener('mousemove', (event) => {
+    if (window.innerWidth <= 680) {
+      return;
+    }
+
+    const bounds = viewport.getBoundingClientRect();
+    const threshold = Math.min(EDGE_THRESHOLD_PX, bounds.width * EDGE_THRESHOLD_RATIO);
+    const pointerX = event.clientX - bounds.left;
+
+    let nextDirection = 0;
+    if (pointerX <= threshold) {
+      nextDirection = -1;
+    } else if (pointerX >= bounds.width - threshold) {
+      nextDirection = 1;
+    }
+
+    if (nextDirection === edgeDirection) {
+      return;
+    }
+
+    edgeDirection = nextDirection;
+    if (edgeDirection) {
+      scheduleEdgeScroll();
+    } else {
+      clearEdgeTimer();
+    }
+  });
+
+  viewport.addEventListener('mouseleave', () => {
+    edgeDirection = 0;
+    clearEdgeTimer();
+  });
+
+  window.addEventListener('resize', render);
+  activeIndex = clampIndex(Math.floor((slides.length - 1) / 2));
+  render();
+})();
+
+(function () {
   const buttons = Array.from(document.querySelectorAll('[data-user-edit]'));
   const form = document.querySelector('[data-user-edit-form]');
   if (!buttons.length || !form) {
