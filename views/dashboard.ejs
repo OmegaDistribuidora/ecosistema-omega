@@ -1,24 +1,26 @@
 <%- include('partials/head', { title, theme }) %>
 
 <main class="dashboard-page omega-page">
-  <header class="dashboard-top glass-card omega-header">
-    <div class="brand-inline">
-      <img
-        src="<%= fixedLogoUrl %>"
-        alt="Omega Distribuidora"
-        class="omega-logo"
-        onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
-      />
-      <div class="brand-text">
-        <h1><%= (theme && theme.app_name) || 'Ecossistema Omega' %></h1>
-        <p>Central de Sistema da Omega Distribuidora</p>
-      </div>
-    </div>
+  <img
+    src="/public/assets/login/logo-branca-omega.png"
+    alt="Omega Distribuidora"
+    class="dashboard-corner-brand"
+    onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
+  />
 
+  <header class="dashboard-top">
+    <div class="dashboard-brand-wrap">
+      <img
+        src="/public/assets/login/logo-ecosistema-omega.png"
+        alt="Ecossistema Omega"
+        class="dashboard-ecosystem-brand"
+      />
+    </div>
     <div class="dashboard-actions">
       <% if (currentUser && currentUser.is_admin) { %>
         <a class="btn btn-secondary" href="/admin">Painel Admin</a>
       <% } %>
+      <a class="btn btn-ghost" href="/account/password">Trocar senha</a>
 
       <form method="post" action="/logout">
         <button type="submit" class="btn btn-ghost">Sair</button>
@@ -26,64 +28,64 @@
     </div>
   </header>
 
-  <section class="selector-card glass-card omega-selector">
-    <div class="welcome-banner">
-      <div>
-        <strong>Bem-vindo de volta, <%= (currentUser && currentUser.username) || 'usuario' %>.</strong>
-        <span>Hoje &eacute; <%= todayLabel %>.</span>
-      </div>
-    </div>
-
+  <section class="selector-card omega-selector">
     <% if (!systems.length) { %>
       <p class="muted">Sem sistemas liberados para seu usuario.</p>
     <% } else { %>
-      <section class="systems-carousel" data-systems-carousel>
-        <button type="button" class="carousel-nav prev" data-carousel-prev aria-label="Card anterior">
-          <span aria-hidden="true">&#8249;</span>
-        </button>
-
-        <div class="carousel-viewport" data-carousel-viewport>
-          <div class="carousel-track" data-carousel-track>
-            <% systems.forEach((system, index) => { %>
-              <% const status = (systemStatuses && systemStatuses[system.id]) || { online: false, statusCode: null }; %>
-              <article class="carousel-slide" data-carousel-slide data-slide-index="<%= index %>">
-                <a
-                  class="system-card"
-                  href="/go/<%= system.id %>"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <div class="system-card-media">
-                    <img
-                      src="<%= system.preview_image_url || '/public/assets/omega-logo.svg' %>"
-                      alt="<%= system.name %>"
-                      loading="lazy"
-                      onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
-                    />
-                  </div>
-
-                  <div class="system-card-body">
-                    <h2><%= system.name %></h2>
-                    <p><%= system.description || 'Acessar sistema' %></p>
-
-                    <div class="system-card-footer">
-                      <span class="card-status-badge <%= status.online ? 'is-online' : 'is-offline' %>">
-                        <%= status.online ? 'Online' : 'Offline' %>
-                      </span>
-                    </div>
-                  </div>
-                </a>
-              </article>
-            <% }) %>
+      <div class="dashboard-carousel-stage">
+        <div class="welcome-banner">
+          <div>
+            <strong>Bem-vindo de volta, <%= (currentUser && currentUser.username) || 'usuario' %>.</strong>
+            <span>Hoje &eacute; <%= todayLabel %>.</span>
           </div>
         </div>
 
-        <button type="button" class="carousel-nav next" data-carousel-next aria-label="Próximo card">
-          <span aria-hidden="true">&#8250;</span>
-        </button>
+        <section class="systems-carousel" data-systems-carousel>
+          <button type="button" class="carousel-nav prev" data-carousel-prev aria-label="Card anterior">
+            <span aria-hidden="true">&#8249;</span>
+          </button>
 
-        <div class="carousel-dots" data-carousel-dots aria-label="Selecionar sistema"></div>
-      </section>
+          <div class="carousel-viewport" data-carousel-viewport>
+            <div class="carousel-track" data-carousel-track>
+              <% systems.forEach((system, index) => { %>
+                <article class="carousel-slide" data-carousel-slide data-slide-index="<%= index %>">
+                  <a
+                    class="system-card"
+                    href="/go/<%= system.id %>"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-system-name="<%= system.name %>"
+                    data-system-description="<%= system.description || 'Acessar sistema' %>"
+                  >
+                    <div class="system-card-media">
+                      <img
+                        src="<%= system.preview_image_url || '/public/assets/omega-logo.svg' %>"
+                        alt="<%= system.name %>"
+                        loading="lazy"
+                        onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';"
+                      />
+                    </div>
+
+                    <div class="system-card-body">
+                      <h2><%= system.name %></h2>
+                    </div>
+                  </a>
+                </article>
+              <% }) %>
+            </div>
+          </div>
+
+          <button type="button" class="carousel-nav next" data-carousel-next aria-label="Proximo card">
+            <span aria-hidden="true">&#8250;</span>
+          </button>
+
+          <div class="carousel-dots" data-carousel-dots aria-label="Selecionar sistema"></div>
+        </section>
+
+        <div class="carousel-description" data-carousel-description>
+          <p class="carousel-description-text" data-carousel-description-text></p>
+        </div>
+      </div>
     <% } %>
   </section>
 </main>

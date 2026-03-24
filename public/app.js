@@ -66,6 +66,7 @@
   const prevBtn = root.querySelector('[data-carousel-prev]');
   const nextBtn = root.querySelector('[data-carousel-next]');
   const dotsWrap = root.querySelector('[data-carousel-dots]');
+  const descriptionText = root.parentElement && root.parentElement.querySelector('[data-carousel-description-text]');
 
   if (!viewport || !track || !slides.length) {
     return;
@@ -172,6 +173,13 @@
       dot.classList.toggle('is-active', index === activeIndex);
       dot.setAttribute('aria-pressed', index === activeIndex ? 'true' : 'false');
     });
+
+    if (descriptionText) {
+      const activeLink = slides[activeIndex] && slides[activeIndex].querySelector('.system-card');
+      descriptionText.textContent = activeLink
+        ? (activeLink.dataset.systemDescription || 'Acessar sistema')
+        : '';
+    }
 
     if (prevBtn) {
       prevBtn.disabled = activeIndex === 0;

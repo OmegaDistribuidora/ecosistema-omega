@@ -718,6 +718,30 @@ async function updateUser({ userId, username, password, isAdmin, systemIds, syst
   return tx({ userId, username, password, isAdmin, systemIds: ids, systemLinks });
 }
 
+async function updateUserPassword(userId, password) {
+  const safeUserId = Number(userId);
+  const safePassword = String(password || '');
+
+  if (!Number.isInteger(safeUserId) || safeUserId <= 0 || !safePassword.trim()) {
+    return false;
+  }
+
+  const passwordHash = bcrypt.hashSync(safePassword, 12);
+
+  if (isPostgres) {
+    const result = await pgPool.query(
+      'UPDATE users SET password_hash = $2 WHERE id = $1 RETURNING id',
+      [safeUserId, passwordHash]
+    );
+    return Boolean(result.rows[0]);
+  }
+
+  const outcome = sqliteDb
+    .prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+    .run(passwordHash, safeUserId);
+  return outcome.changes > 0;
+}
+
 async function updateUserSystemAccess(userId, systemIds) {
   const ids = normalizeIdArray(systemIds);
 
@@ -1015,6 +1039,7 @@ module.exports = {
   findUserSystemLink,
   createUser,
   updateUser,
+  updateUserPassword,
   updateUserSystemAccess,
   listSystems,
   createSystem,

@@ -17,6 +17,7 @@ const {
   listAllUserSystemLinks,
   createUser,
   updateUser,
+  updateUserPassword,
   listSystems,
   createSystem,
   updateSystem,
@@ -581,6 +582,59 @@ app.get('/dashboard', requireAuth, async (req, res, next) => {
       systemStatuses,
       todayLabel
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/account/password', requireAuth, (req, res) => {
+  res.render('change-password', {
+    title: 'Trocar Senha',
+    flash: getFlash(req)
+  });
+});
+
+app.post('/account/password', requireAuth, async (req, res, next) => {
+  try {
+    const user = res.locals.currentUser;
+    const currentPassword = String(req.body.current_password || '');
+    const newPassword = String(req.body.new_password || '');
+    const confirmPassword = String(req.body.confirm_password || '');
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setFlash(req, 'error', 'Preencha a senha atual, a nova senha e a confirmacao.');
+      return res.redirect('/account/password');
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isValid) {
+      setFlash(req, 'error', 'A senha atual esta incorreta.');
+      return res.redirect('/account/password');
+    }
+
+    if (newPassword.length < 6) {
+      setFlash(req, 'error', 'A nova senha precisa ter no minimo 6 caracteres.');
+      return res.redirect('/account/password');
+    }
+
+    if (newPassword !== confirmPassword) {
+      setFlash(req, 'error', 'A confirmacao da nova senha nao confere.');
+      return res.redirect('/account/password');
+    }
+
+    if (currentPassword === newPassword) {
+      setFlash(req, 'error', 'A nova senha precisa ser diferente da senha atual.');
+      return res.redirect('/account/password');
+    }
+
+    const updated = await updateUserPassword(user.id, newPassword);
+    if (!updated) {
+      setFlash(req, 'error', 'Nao foi possivel atualizar a senha.');
+      return res.redirect('/account/password');
+    }
+
+    setFlash(req, 'success', 'Senha atualizada com sucesso.');
+    res.redirect('/dashboard');
   } catch (error) {
     next(error);
   }
