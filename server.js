@@ -678,6 +678,7 @@ app.get('/go/:systemId', requireAuth, async (req, res, next) => {
       {
         ecosystemUserId: Number(user.id),
         ecosystemUsername: user.username,
+        ecosystemIsAdmin: Boolean(user.is_admin),
         targetLogin: systemLink.external_login,
         systemId
       },
