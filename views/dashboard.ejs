@@ -2,7 +2,7 @@
 
 <main class="dashboard-page omega-page">
   <% if (activeAnnouncements && activeAnnouncements.length) { %>
-    <div class="dashboard-notice-overlay" data-dashboard-notice>
+    <div class="dashboard-notice-overlay" data-dashboard-notice data-announcement-ids="<%= activeAnnouncements.map((notice) => notice.id).join(',') %>">
       <div class="dashboard-notice-dialog glass-card" role="dialog" aria-modal="true" aria-labelledby="dashboard-notice-title">
         <div class="dashboard-notice-layout">
           <div class="dashboard-notice-content">

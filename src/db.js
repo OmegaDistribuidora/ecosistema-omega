@@ -779,6 +779,21 @@ async function updateUserPassword(userId, password) {
   return outcome.changes > 0;
 }
 
+async function deleteUser(userId) {
+  const safeUserId = Number(userId);
+  if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+    return false;
+  }
+
+  if (isPostgres) {
+    const result = await pgPool.query('DELETE FROM users WHERE id = $1', [safeUserId]);
+    return result.rowCount > 0;
+  }
+
+  const result = sqliteDb.prepare('DELETE FROM users WHERE id = ?').run(safeUserId);
+  return result.changes > 0;
+}
+
 async function updateUserSystemAccess(userId, systemIds) {
   const ids = normalizeIdArray(systemIds);
 
@@ -1348,6 +1363,7 @@ module.exports = {
   createUser,
   updateUser,
   updateUserPassword,
+  deleteUser,
   updateUserSystemAccess,
   listSystems,
   createSystem,

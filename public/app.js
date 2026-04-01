@@ -1,4 +1,15 @@
 (function () {
+  window.submitPostAction = function submitPostAction(action) {
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = action;
+    form.style.display = 'none';
+    document.body.appendChild(form);
+    form.submit();
+  };
+})();
+
+(function () {
   const form = document.querySelector('[data-login-form]');
   if (!form) {
     return;
@@ -300,9 +311,34 @@
   document.body.classList.add('modal-open');
   okButton.focus();
 
-  okButton.addEventListener('click', () => {
-    noticeOverlay.remove();
-    document.body.classList.remove('modal-open');
+  okButton.addEventListener('click', async () => {
+    const ids = String(noticeOverlay.dataset.announcementIds || '')
+      .split(',')
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0);
+
+    okButton.disabled = true;
+
+    try {
+      const response = await fetch('/announcements/ack', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ ids })
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha ao registrar aceite do comunicado.');
+      }
+
+      noticeOverlay.remove();
+      document.body.classList.remove('modal-open');
+    } catch (error) {
+      okButton.disabled = false;
+      window.alert('Nao foi possivel confirmar o comunicado. Tente novamente.');
+    }
   });
 })();
 
@@ -511,6 +547,7 @@
   const isAdminInput = form.querySelector('[data-user-field="is_admin"]');
   const systemOptions = Array.from(form.querySelectorAll('[data-user-system-option]'));
   const ssoInputs = Array.from(form.querySelectorAll('[data-user-sso-login]'));
+  const deleteBtn = form.querySelector('[data-user-delete]');
   const cancelBtn = form.querySelector('[data-user-edit-cancel]');
   const modal = form.closest('[data-modal]');
 
@@ -561,6 +598,12 @@
     if (isAdminInput) {
       isAdminInput.checked = isAdmin;
     }
+    if (deleteBtn) {
+      const canDelete = button.dataset.canDelete === '1';
+      deleteBtn.hidden = !canDelete;
+      deleteBtn.dataset.deleteAction = `/admin/users/${id}/delete`;
+      deleteBtn.dataset.username = username;
+    }
 
     for (const option of systemOptions) {
       const optionId = Number(option.value);
@@ -585,6 +628,22 @@
     cancelBtn.addEventListener('click', () => {
       if (window.AdminModal && modal) {
         window.AdminModal.close(modal);
+      }
+    });
+  }
+
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', (event) => {
+      const username = deleteBtn.dataset.username || 'este usuario';
+      const confirmed = window.confirm(`Excluir ${username}? Esta acao nao pode ser desfeita.`);
+      if (!confirmed) {
+        event.preventDefault();
+        return;
+      }
+
+      if (deleteBtn.dataset.deleteAction && window.submitPostAction) {
+        event.preventDefault();
+        window.submitPostAction(deleteBtn.dataset.deleteAction);
       }
     });
   }

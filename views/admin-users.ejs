@@ -65,6 +65,7 @@
               data-is-admin="<%= user.is_admin ? '1' : '0' %>"
               data-system-ids="<%= user.system_ids || '' %>"
               data-sso-mappings="<%= encodeURIComponent(JSON.stringify(user.ssoMappings || [])) %>"
+              data-can-delete="<%= currentUser && Number(currentUser.id) !== Number(user.id) ? '1' : '0' %>"
               title="Editar usuario"
             >
               &#9998;
@@ -211,6 +212,14 @@
         <% } %>
 
         <div class="form-actions-inline admin-modal-actions">
+          <button
+            type="button"
+            class="btn btn-danger"
+            data-user-delete
+            hidden
+          >
+            Excluir Usuario
+          </button>
           <button type="button" class="btn btn-ghost" data-user-edit-cancel>Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Alteracoes</button>
         </div>

@@ -18,6 +18,7 @@ const {
   createUser,
   updateUser,
   updateUserPassword,
+  deleteUser,
   listSystems,
   createSystem,
   updateSystem,
@@ -235,6 +236,15 @@ function parseIds(raw) {
   return values
     .map((item) => Number(item))
     .filter((item) => Number.isInteger(item) && item > 0);
+}
+
+function getAcknowledgedAnnouncementIds(req) {
+  return parseIds(req && req.session && req.session.acknowledgedAnnouncementIds);
+}
+
+function getPendingAnnouncements(req, announcements) {
+  const acknowledgedIds = new Set(getAcknowledgedAnnouncementIds(req));
+  return (announcements || []).filter((announcement) => !acknowledgedIds.has(Number(announcement.id)));
 }
 
 function parseFortalezaDateTimeInput(rawValue) {
@@ -561,6 +571,7 @@ app.post('/login', async (req, res, next) => {
     }
 
     req.session.userId = user.id;
+    req.session.acknowledgedAnnouncementIds = [];
     res.redirect('/dashboard');
   } catch (error) {
     next(error);
@@ -578,7 +589,7 @@ app.get('/dashboard', requireAuth, async (req, res, next) => {
     const user = res.locals.currentUser;
     const systems = await getUserAccessibleSystems(user.id, Boolean(user.is_admin));
     const systemStatuses = await buildSystemsStatusMap(systems);
-    const activeAnnouncements = await listActiveAnnouncementsForUser(user.id);
+    const activeAnnouncements = getPendingAnnouncements(req, await listActiveAnnouncementsForUser(user.id));
     try {
       await registerHistoryEntry({ userId: user.id, systemId: null });
     } catch (historyError) {
@@ -602,6 +613,15 @@ app.get('/dashboard', requireAuth, async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+app.post('/announcements/ack', requireAuth, (req, res) => {
+  const ids = parseIds(req.body && req.body.ids);
+  const currentIds = new Set(getAcknowledgedAnnouncementIds(req));
+  ids.forEach((id) => currentIds.add(id));
+  req.session.acknowledgedAnnouncementIds = Array.from(currentIds);
+
+  res.json({ ok: true });
 });
 
 app.get('/account/password', requireAuth, (req, res) => {
@@ -661,7 +681,7 @@ app.get('/go/:systemId', requireAuth, async (req, res, next) => {
   try {
     const user = res.locals.currentUser;
     const systemId = Number(req.params.systemId);
-    const activeAnnouncements = await listActiveAnnouncementsForUser(user.id);
+    const activeAnnouncements = getPendingAnnouncements(req, await listActiveAnnouncementsForUser(user.id));
 
     if (activeAnnouncements.length) {
       setFlash(req, 'info', 'Leia o comunicado ativo antes de acessar um modulo.');
@@ -906,6 +926,48 @@ app.post('/admin/users/:id', requireAuth, requireAdmin, async (req, res, next) =
       }
     }
 
+    res.redirect('/admin/users');
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/admin/users/:id/delete', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const userId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      setFlash(req, 'error', 'Usuario invalido.');
+      return res.redirect('/admin/users');
+    }
+
+    if (res.locals.currentUser && Number(res.locals.currentUser.id) === userId) {
+      setFlash(req, 'error', 'Voce nao pode excluir o proprio usuario logado.');
+      return res.redirect('/admin/users');
+    }
+
+    const users = await listUsers();
+    const targetUser = users.find((user) => Number(user.id) === userId);
+    if (!targetUser) {
+      setFlash(req, 'error', 'Usuario nao encontrado.');
+      return res.redirect('/admin/users');
+    }
+
+    if (targetUser.is_admin) {
+      const adminCount = users.filter((user) => Boolean(user.is_admin)).length;
+      if (adminCount <= 1) {
+        setFlash(req, 'error', 'Nao e permitido excluir o ultimo administrador do Ecossistema.');
+        return res.redirect('/admin/users');
+      }
+    }
+
+    const deleted = await deleteUser(userId);
+    if (!deleted) {
+      setFlash(req, 'error', 'Nao foi possivel excluir o usuario.');
+      return res.redirect('/admin/users');
+    }
+
+    setFlash(req, 'success', `Usuario ${targetUser.username} excluido com sucesso.`);
     res.redirect('/admin/users');
   } catch (error) {
     next(error);
