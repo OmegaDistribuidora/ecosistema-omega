@@ -1,91 +1,151 @@
-﻿# Ecossistema Omega
+# Ecossistema Omega
 
-Portal unificado para acesso aos sistemas da empresa com:
+Portal unificado para acesso aos sistemas internos da empresa, com autenticação centralizada, controle de permissões por usuário e painel administrativo para gestão de módulos.
 
-- Login unico e controle de acesso por usuario
-- Painel administrativo para criar usuarios
-- Cadastro de sistemas (nome + link) com permissao por usuario
-- Tema dark customizavel (cores, logo, imagem de fundo)
-- Abertura dos sistemas dentro da interface (iframe) para manter o link principal
+## Visão Geral
 
-## Credenciais iniciais
+O sistema funciona como uma camada central de acesso:
 
-- Usuario: `admin`
-- Senha: `Omega@123`
+- autentica usuários no Ecossistema
+- exibe apenas os sistemas liberados para cada usuário
+- registra histórico de acesso ao Ecossistema e aos módulos
+- permite administração de usuários, sistemas e permissões
+- suporta handoff SSO para sistemas integrados
+
+## Funcionalidades
+
+- login com sessão persistida
+- dashboard com carrossel de cards dos sistemas liberados
+- histórico de acessos
+- troca de senha do usuário autenticado
+- painel admin para:
+  - criar e editar usuários
+  - criar e editar sistemas
+  - definir acessos por sistema
+  - configurar imagens dos cards
+  - visualizar mapeamentos SSO
+- checagem de disponibilidade dos sistemas
+- upload e uso de imagens locais para cards e identidade visual
 
 ## Stack
 
 - Node.js
-- Express + EJS
-- PostgreSQL (`pg`) no Railway
-- SQLite (`better-sqlite3`) como fallback local
-- Sessao persistida em SQLite (`connect-sqlite3`)
+- Express
+- EJS
+- PostgreSQL via `pg`
+- SQLite via `better-sqlite3` como fallback local
+- `express-session`
+- `multer`
+- `jsonwebtoken`
 
-## Rodar local
+## Estrutura Principal
+
+Arquivos centrais:
+
+- `server.js`: rotas, autenticação, sessão, renderização e integração entre camadas
+- `src/db.js`: inicialização do banco, queries e regras de persistência
+- `public/styles.css`: estilos globais
+- `public/app.js`: comportamento do login, carrossel e formulários administrativos
+
+Views principais:
+
+- `views/login.ejs`
+- `views/dashboard.ejs`
+- `views/change-password.ejs`
+- `views/admin-home.ejs`
+- `views/admin-users.ejs`
+- `views/admin-systems.ejs`
+- `views/admin-history.ejs`
+- `views/admin-mappings.ejs`
+
+## Rotas Principais
+
+Autenticação:
+
+- `GET /login`
+- `POST /login`
+- `POST /logout`
+
+Usuário autenticado:
+
+- `GET /dashboard`
+- `GET /go/:systemId`
+- `GET /account/password`
+- `POST /account/password`
+
+Admin:
+
+- `GET /admin`
+- `GET /admin/users`
+- `GET /admin/systems`
+- `GET /admin/history`
+- `GET /admin/mappings`
+
+## Banco de Dados
+
+O sistema suporta dois modos:
+
+- PostgreSQL em ambientes com `DATABASE_URL`
+- SQLite para execução local sem banco externo
+
+Tabelas utilizadas:
+
+- `users`
+- `systems`
+- `user_system_access`
+- `user_system_links`
+- `settings`
+- `historico`
+
+## Rodar Localmente
+
+Instalação:
 
 ```bash
 npm install
-npm run start
 ```
 
-A aplicacao abre em `http://localhost:3000`.
+Execução:
 
-## Variaveis de ambiente
+```bash
+npm start
+```
 
-- `PORT`: porta do servidor (Railway define automaticamente)
-- `SESSION_SECRET`: segredo da sessao (obrigatorio em producao)
-- `DATABASE_URL`: conexao Postgres (quando presente, app usa Postgres)
-- `IMAGES_DIR`: caminho do volume de imagens (padrao `/images`)
-- `NODE_ENV=production`
-- `SSO_ISSUER`: emissor do token enviado aos sistemas (padrao `ecosistema-omega`)
-- `SSO_TOKEN_TTL`: validade do token de handoff em segundos (padrao `45`)
-- `SSO_SECRET_<CHAVE>`: segredo compartilhado com cada sistema habilitado para login delegado
-- `SSO_AUDIENCE_<CHAVE>`: audience do token para cada sistema; se omitido, usa a propria chave
+Aplicação disponível em:
 
-## Deploy no Railway
+```text
+http://localhost:3000
+```
 
-1. Suba este repositorio para GitHub.
-2. No Railway, crie um novo projeto e conecte o repo.
-3. Adicione um banco Postgres no mesmo projeto Railway.
-4. No service `ecosistema-omega`, em **Variables**, clique em **Add Variable** no card roxo e selecione a variavel do Postgres (`DATABASE_URL`).
-5. Configure tambem:
-   - `SESSION_SECRET` com um valor forte.
-   - `NODE_ENV=production`
-   - `IMAGES_DIR=/images` (se estiver usando volume)
-6. Railway detecta Node automaticamente e executa `npm start`.
+## Variáveis de Ambiente
 
-## Imagens no volume
+Variáveis utilizadas pelo projeto:
 
-Se voce criou um volume em `/images`, salve os arquivos com estes nomes:
+- `PORT`
+- `NODE_ENV`
+- `SESSION_SECRET`
+- `DATABASE_URL`
+- `IMAGES_DIR`
 
-- `/images/logo.png`
-- `/images/aurora.png`
+O sistema também pode usar variáveis adicionais de integração SSO, quando essa funcionalidade estiver habilitada para algum módulo.
 
-O sistema tenta usar esses arquivos automaticamente e aplica fallback local se nao existirem.
+## Imagens e Assets
 
-Tambem e possivel enviar imagens direto no painel admin:
+O projeto usa assets locais em `public/assets` e também suporta imagens servidas por `/images`.
 
-- Menu `Novo` > aba `Configuracao`
-- Upload rapido de `Logo` e `Aurora`
-- Upload livre para outras imagens (gera URL `/images/...`)
+Em produção, o diretório de imagens pode ser apontado por `IMAGES_DIR`.
 
-## Observacao importante sobre "manter o link"
+## Deploy
 
-O sistema carrega os apps externos via `iframe`, mantendo o link do Ecossistema.
+Fluxo recomendado:
 
-Se algum app bloquear incorporacao via `X-Frame-Options` ou `Content-Security-Policy`, ele nao abre no `iframe`. Nesses casos, use o botao "Abrir em nova aba".
+1. publicar o repositório no GitHub
+2. conectar o repositório ao Railway
+3. configurar variáveis de ambiente do serviço
+4. apontar o banco PostgreSQL do projeto
+5. publicar as alterações pela branch principal
 
-## Login delegado
+## Observações
 
-Para cada sistema com login delegado:
-
-- habilite `SSO` no cadastro do sistema
-- defina uma `Chave SSO`, por exemplo `controle_ferias`
-- configure no Railway do Ecossistema `SSO_SECRET_CONTROLE_FERIAS`
-- configure no Railway do sistema alvo o mesmo segredo em `ECOSYSTEM_SSO_SHARED_SECRET`
-- no cadastro do usuario do Ecossistema, informe o login que esse usuario usa dentro do sistema alvo
-
-Exemplos de chaves:
-
-- `controle_ferias` -> `SSO_SECRET_CONTROLE_FERIAS`
-- `controle_atestado` -> `SSO_SECRET_CONTROLE_ATESTADO`
+- o sistema local e o ambiente de produção podem ter quantidades diferentes de módulos cadastrados; por isso, mudanças visuais devem sempre ser testadas com responsividade real
+- o README não documenta credenciais, segredos, chaves ou detalhes operacionais sensíveis

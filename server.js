@@ -21,6 +21,12 @@ const {
   listSystems,
   createSystem,
   updateSystem,
+  deleteSystem,
+  listAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  closeAnnouncement,
+  listActiveAnnouncementsForUser,
   getUserAccessibleSystems,
   findUserSystemLink,
   registerHistoryEntry,
@@ -229,6 +235,15 @@ function parseIds(raw) {
   return values
     .map((item) => Number(item))
     .filter((item) => Number.isInteger(item) && item > 0);
+}
+
+function parseFortalezaDateTimeInput(rawValue) {
+  const value = String(rawValue || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
+    return null;
+  }
+
+  return new Date(`${value}:00-03:00`).toISOString();
 }
 
 function normalizeSystemUrl(rawUrl) {
@@ -563,6 +578,7 @@ app.get('/dashboard', requireAuth, async (req, res, next) => {
     const user = res.locals.currentUser;
     const systems = await getUserAccessibleSystems(user.id, Boolean(user.is_admin));
     const systemStatuses = await buildSystemsStatusMap(systems);
+    const activeAnnouncements = await listActiveAnnouncementsForUser(user.id);
     try {
       await registerHistoryEntry({ userId: user.id, systemId: null });
     } catch (historyError) {
@@ -580,7 +596,8 @@ app.get('/dashboard', requireAuth, async (req, res, next) => {
       flash: getFlash(req),
       systems,
       systemStatuses,
-      todayLabel
+      todayLabel,
+      activeAnnouncements
     });
   } catch (error) {
     next(error);
@@ -644,6 +661,12 @@ app.get('/go/:systemId', requireAuth, async (req, res, next) => {
   try {
     const user = res.locals.currentUser;
     const systemId = Number(req.params.systemId);
+    const activeAnnouncements = await listActiveAnnouncementsForUser(user.id);
+
+    if (activeAnnouncements.length) {
+      setFlash(req, 'info', 'Leia o comunicado ativo antes de acessar um modulo.');
+      return res.redirect('/dashboard');
+    }
 
     if (!Number.isInteger(systemId) || systemId <= 0) {
       setFlash(req, 'error', 'Sistema invalido.');
@@ -716,7 +739,8 @@ app.get('/admin', requireAuth, requireAdmin, async (req, res, next) => {
       usersCount: users.length,
       systemsCount: systems.length,
       imagesCount: images.length,
-      mappedSystemsCount: mappingGroups.length
+      mappedSystemsCount: mappingGroups.length,
+      announcementsCount: (await listAnnouncements()).length
     });
   } catch (error) {
     next(error);
@@ -764,6 +788,19 @@ app.get('/admin/history', requireAuth, requireAdmin, async (req, res, next) => {
       title: 'Historico de Acessos',
       flash: getFlash(req),
       historyRows: await listHistory({ limit: 500 })
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/admin/notices', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    res.render('admin-notices', {
+      title: 'Comunicados',
+      flash: getFlash(req),
+      notices: await listAnnouncements(),
+      usersBasic: await listUsersBasic()
     });
   } catch (error) {
     next(error);
@@ -985,6 +1022,143 @@ app.post('/admin/systems/:id', requireAuth, requireAdmin, (req, res, next) => {
       res.redirect('/admin/systems');
     }
   });
+});
+
+app.post('/admin/systems/:id/delete', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const systemId = Number(req.params.id);
+
+    if (!Number.isInteger(systemId) || systemId <= 0) {
+      setFlash(req, 'error', 'Sistema invalido.');
+      return res.redirect('/admin/systems');
+    }
+
+    const systems = await listSystems({ includeInactive: true });
+    const targetSystem = systems.find((system) => Number(system.id) === systemId);
+    if (!targetSystem) {
+      setFlash(req, 'error', 'Sistema nao encontrado.');
+      return res.redirect('/admin/systems');
+    }
+
+    const deleted = await deleteSystem(systemId);
+    if (!deleted) {
+      setFlash(req, 'error', 'Nao foi possivel excluir o sistema.');
+      return res.redirect('/admin/systems');
+    }
+
+    setFlash(req, 'success', `Sistema ${targetSystem.name} excluido com sucesso.`);
+    res.redirect('/admin/systems');
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/admin/notices', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const title = String(req.body.title || '').trim();
+    const message = String(req.body.message || '').trim();
+    const startsAt = parseFortalezaDateTimeInput(req.body.starts_at);
+    const endsAt = parseFortalezaDateTimeInput(req.body.ends_at);
+    const userIds = parseIds(req.body.user_ids);
+
+    if (!title || !message || !startsAt || !endsAt) {
+      setFlash(req, 'error', 'Preencha titulo, mensagem, inicio e fim do comunicado.');
+      return res.redirect('/admin/notices');
+    }
+
+    if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+      setFlash(req, 'error', 'O horario final precisa ser maior que o horario inicial.');
+      return res.redirect('/admin/notices');
+    }
+
+    if (!userIds.length) {
+      setFlash(req, 'error', 'Selecione ao menos um usuario para visualizar o comunicado.');
+      return res.redirect('/admin/notices');
+    }
+
+    await createAnnouncement({
+      title,
+      message,
+      startsAt,
+      endsAt,
+      userIds,
+      createdByUserId: res.locals.currentUser && res.locals.currentUser.id
+    });
+    setFlash(req, 'success', `Comunicado ${title} criado com sucesso.`);
+    res.redirect('/admin/notices');
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/admin/notices/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const noticeId = Number(req.params.id);
+    const title = String(req.body.title || '').trim();
+    const message = String(req.body.message || '').trim();
+    const startsAt = parseFortalezaDateTimeInput(req.body.starts_at);
+    const endsAt = parseFortalezaDateTimeInput(req.body.ends_at);
+    const userIds = parseIds(req.body.user_ids);
+
+    if (!Number.isInteger(noticeId) || noticeId <= 0) {
+      setFlash(req, 'error', 'Comunicado invalido.');
+      return res.redirect('/admin/notices');
+    }
+
+    if (!title || !message || !startsAt || !endsAt) {
+      setFlash(req, 'error', 'Preencha titulo, mensagem, inicio e fim do comunicado.');
+      return res.redirect('/admin/notices');
+    }
+
+    if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+      setFlash(req, 'error', 'O horario final precisa ser maior que o horario inicial.');
+      return res.redirect('/admin/notices');
+    }
+
+    if (!userIds.length) {
+      setFlash(req, 'error', 'Selecione ao menos um usuario para visualizar o comunicado.');
+      return res.redirect('/admin/notices');
+    }
+
+    const updated = await updateAnnouncement(noticeId, {
+      title,
+      message,
+      startsAt,
+      endsAt,
+      userIds
+    });
+
+    if (!updated) {
+      setFlash(req, 'error', 'Comunicado nao encontrado.');
+      return res.redirect('/admin/notices');
+    }
+
+    setFlash(req, 'success', `Comunicado ${title} atualizado com sucesso.`);
+    res.redirect('/admin/notices');
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/admin/notices/:id/close', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const noticeId = Number(req.params.id);
+    if (!Number.isInteger(noticeId) || noticeId <= 0) {
+      setFlash(req, 'error', 'Comunicado invalido.');
+      return res.redirect('/admin/notices');
+    }
+
+    const closed = await closeAnnouncement(noticeId);
+    if (!closed) {
+      setFlash(req, 'error', 'Nao foi possivel encerrar o comunicado.');
+      return res.redirect('/admin/notices');
+    }
+
+    setFlash(req, 'success', 'Comunicado encerrado antes do prazo.');
+    res.redirect('/admin/notices');
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/admin/assets/upload', requireAuth, requireAdmin, (req, res, next) => {

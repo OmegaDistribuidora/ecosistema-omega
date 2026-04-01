@@ -17,6 +17,7 @@
           <a href="/admin">Menu Admin</a>
           <a href="/admin/users">Usuarios</a>
           <a href="/admin/systems">Sistemas</a>
+          <a href="/admin/notices">Comunicados</a>
           <a href="/admin/mappings">Mapeamentos</a>
           <a href="/admin/history">Historico</a>
           <a href="/dashboard">Painel Principal</a>
@@ -27,58 +28,20 @@
 
   <%- include('partials/flash', { flash }) %>
 
-  <section class="split-grid">
+  <section class="split-grid admin-management-grid">
     <article class="glass-card admin-section">
-      <h2 class="section-title">Novo Usuario</h2>
-      <form method="post" action="/admin/users" class="form-stack compact">
-        <label>
-          Usuario
-          <input type="text" name="username" required />
-        </label>
+      <div class="admin-section-head">
+        <div>
+          <h2 class="section-title">Usuarios</h2>
+          <p class="muted">Cadastre novos usuarios em um popup e mantenha a lista principal mais limpa.</p>
+        </div>
+        <button type="button" class="btn btn-primary" data-open-modal="user-create-modal">Novo Usuario</button>
+      </div>
 
-        <label>
-          Senha inicial
-          <input type="password" name="password" minlength="6" required />
-        </label>
-
-        <label class="check-row">
-          <input type="checkbox" name="is_admin" />
-          <span>Administrador</span>
-        </label>
-
-        <fieldset>
-          <legend>Modulos com acesso</legend>
-          <div class="check-grid">
-            <% systems.forEach((system) => { %>
-              <label class="check-row">
-                <input type="checkbox" name="system_ids" value="<%= system.id %>" />
-                <span><%= system.name %></span>
-              </label>
-            <% }) %>
-          </div>
-        </fieldset>
-
-        <% const ssoSystems = systems.filter((system) => system.sso_enabled); %>
-        <% if (ssoSystems.length) { %>
-          <fieldset>
-            <legend>Login por sistema (SSO delegado)</legend>
-            <div class="form-stack compact">
-              <% ssoSystems.forEach((system) => { %>
-                <label>
-                  <%= system.name %>
-                  <input
-                    type="text"
-                    name="sso_login_<%= system.id %>"
-                    placeholder="login usado dentro deste sistema"
-                  />
-                </label>
-              <% }) %>
-            </div>
-          </fieldset>
-        <% } %>
-
-        <button type="submit" class="btn btn-primary">Criar Usuario</button>
-      </form>
+      <div class="admin-callout">
+        <strong>Fluxo simplificado</strong>
+        <p class="muted small">Criacao e edicao agora acontecem em modal, com os mesmos campos e validacoes do sistema atual.</p>
+      </div>
     </article>
 
     <article class="glass-card admin-section">
@@ -109,9 +72,90 @@
           </div>
         <% }) %>
       </div>
+    </article>
+  </section>
 
-      <form method="post" action="/admin/users/0" class="form-stack compact hidden" data-user-edit-form>
-        <h3 data-user-edit-title>Editar Usuario</h3>
+  <% const ssoSystems = systems.filter((system) => system.sso_enabled); %>
+
+  <div class="admin-modal hidden" data-modal="user-create-modal" aria-hidden="true">
+    <div class="admin-modal-backdrop" data-close-modal></div>
+    <div class="admin-modal-dialog glass-card" role="dialog" aria-modal="true" aria-labelledby="user-create-modal-title">
+      <div class="admin-modal-header">
+        <div>
+          <h3 id="user-create-modal-title">Novo Usuario</h3>
+          <p class="muted small">Preencha os dados e defina os acessos iniciais.</p>
+        </div>
+        <button type="button" class="admin-modal-close" aria-label="Fechar popup" data-close-modal>&times;</button>
+      </div>
+
+      <form method="post" action="/admin/users" class="form-stack compact admin-modal-form" data-reset-on-open>
+        <label>
+          Usuario
+          <input type="text" name="username" required />
+        </label>
+
+        <label>
+          Senha inicial
+          <input type="password" name="password" minlength="6" required />
+        </label>
+
+        <label class="check-row">
+          <input type="checkbox" name="is_admin" />
+          <span>Administrador</span>
+        </label>
+
+        <fieldset>
+          <legend>Modulos com acesso</legend>
+          <div class="check-grid">
+            <% systems.forEach((system) => { %>
+              <label class="check-row">
+                <input type="checkbox" name="system_ids" value="<%= system.id %>" />
+                <span><%= system.name %></span>
+              </label>
+            <% }) %>
+          </div>
+        </fieldset>
+
+        <% if (ssoSystems.length) { %>
+          <fieldset>
+            <legend>Login por sistema (SSO delegado)</legend>
+            <div class="form-stack compact">
+              <% ssoSystems.forEach((system) => { %>
+                <label>
+                  <%= system.name %>
+                  <input
+                    type="text"
+                    name="sso_login_<%= system.id %>"
+                    placeholder="login usado dentro deste sistema"
+                  />
+                </label>
+              <% }) %>
+            </div>
+          </fieldset>
+        <% } %>
+
+        <div class="form-actions-inline admin-modal-actions">
+          <button type="button" class="btn btn-ghost" data-close-modal>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Criar Usuario</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="admin-modal hidden" data-modal="user-edit-modal" aria-hidden="true">
+    <div class="admin-modal-backdrop" data-close-modal></div>
+    <div class="admin-modal-dialog glass-card" role="dialog" aria-modal="true" aria-labelledby="user-edit-modal-title">
+      <div class="admin-modal-header">
+        <div>
+          <h3 id="user-edit-modal-title" data-user-edit-title>Editar Usuario</h3>
+          <p class="muted small">Atualize acesso, permissao administrativa e logins SSO.</p>
+        </div>
+        <button type="button" class="admin-modal-close" aria-label="Fechar popup" data-close-modal>&times;</button>
+      </div>
+
+      <form method="post" action="/admin/users/0" class="form-stack compact admin-modal-form" data-user-edit-form>
+        <input type="text" name="fake_username" autocomplete="username" class="sr-only" tabindex="-1" aria-hidden="true" />
+        <input type="password" name="fake_password" autocomplete="current-password" class="sr-only" tabindex="-1" aria-hidden="true" />
 
         <label>
           Nome de usuario
@@ -120,7 +164,14 @@
 
         <label>
           Nova senha (opcional)
-          <input type="password" name="password" minlength="6" placeholder="deixe vazio para manter" />
+          <input
+            type="password"
+            name="password"
+            minlength="6"
+            placeholder="deixe vazio para manter"
+            autocomplete="new-password"
+            data-user-password-field
+          />
         </label>
 
         <label class="check-row">
@@ -159,13 +210,13 @@
           </fieldset>
         <% } %>
 
-        <div class="form-actions-inline">
-          <button type="submit" class="btn btn-primary">Salvar Alteracoes</button>
+        <div class="form-actions-inline admin-modal-actions">
           <button type="button" class="btn btn-ghost" data-user-edit-cancel>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Alteracoes</button>
         </div>
       </form>
-    </article>
-  </section>
+    </div>
+  </div>
 </main>
 
 <%- include('partials/foot') %>

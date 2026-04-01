@@ -161,6 +161,23 @@ async function initializePostgres() {
       system_id INTEGER REFERENCES systems(id) ON DELETE SET NULL,
       accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS announcements (
+      id BIGSERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      starts_at TIMESTAMPTZ NOT NULL,
+      ends_at TIMESTAMPTZ NOT NULL,
+      closed_at TIMESTAMPTZ,
+      created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS announcement_users (
+      announcement_id INTEGER NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (announcement_id, user_id)
+    );
   `);
 
   await pgPool.query(
@@ -274,6 +291,26 @@ function initializeSqlite() {
       accessed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
       FOREIGN KEY (system_id) REFERENCES systems(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS announcements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      starts_at TEXT NOT NULL,
+      ends_at TEXT NOT NULL,
+      closed_at TEXT,
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS announcement_users (
+      announcement_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      PRIMARY KEY (announcement_id, user_id),
+      FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
   `);
 
@@ -921,6 +958,21 @@ async function updateSystem(systemId, { name, url, description, previewImageUrl,
   return result.changes > 0;
 }
 
+async function deleteSystem(systemId) {
+  const safeSystemId = Number(systemId);
+  if (!Number.isInteger(safeSystemId) || safeSystemId <= 0) {
+    return false;
+  }
+
+  if (isPostgres) {
+    const result = await pgPool.query('DELETE FROM systems WHERE id = $1', [safeSystemId]);
+    return result.rowCount > 0;
+  }
+
+  const result = sqliteDb.prepare('DELETE FROM systems WHERE id = ?').run(safeSystemId);
+  return result.changes > 0;
+}
+
 async function getUserAccessibleSystems(userId, isAdmin) {
   if (isAdmin) {
     return listSystems({ includeInactive: false });
@@ -1025,6 +1077,262 @@ async function listHistory({ limit = 300 } = {}) {
     .all(safeLimit);
 }
 
+async function listAnnouncements() {
+  if (isPostgres) {
+    const result = await pgPool.query(`
+      SELECT
+        a.id,
+        a.title,
+        a.message,
+        a.starts_at,
+        a.ends_at,
+        a.closed_at,
+        a.created_at,
+        a.created_by_user_id,
+        creator.username AS created_by_username,
+        COALESCE(
+          string_agg(DISTINCT u.username, ', ' ORDER BY u.username)
+            FILTER (WHERE u.username IS NOT NULL),
+          ''
+        ) AS user_names,
+        COALESCE(
+          string_agg(DISTINCT au.user_id::text, ',' ORDER BY au.user_id)
+            FILTER (WHERE au.user_id IS NOT NULL),
+          ''
+        ) AS user_ids
+      FROM announcements a
+      LEFT JOIN users creator ON creator.id = a.created_by_user_id
+      LEFT JOIN announcement_users au ON au.announcement_id = a.id
+      LEFT JOIN users u ON u.id = au.user_id
+      GROUP BY a.id, creator.username
+      ORDER BY
+        CASE WHEN a.closed_at IS NULL AND NOW() BETWEEN a.starts_at AND a.ends_at THEN 0 ELSE 1 END,
+        a.starts_at DESC,
+        a.id DESC
+    `);
+    return result.rows;
+  }
+
+  return sqliteDb.prepare(`
+    SELECT
+      a.id,
+      a.title,
+      a.message,
+      a.starts_at,
+      a.ends_at,
+      a.closed_at,
+      a.created_at,
+      a.created_by_user_id,
+      creator.username AS created_by_username,
+      COALESCE(GROUP_CONCAT(DISTINCT u.username), '') AS user_names,
+      COALESCE(GROUP_CONCAT(DISTINCT au.user_id), '') AS user_ids
+    FROM announcements a
+    LEFT JOIN users creator ON creator.id = a.created_by_user_id
+    LEFT JOIN announcement_users au ON au.announcement_id = a.id
+    LEFT JOIN users u ON u.id = au.user_id
+    GROUP BY a.id, creator.username
+    ORDER BY
+      CASE
+        WHEN a.closed_at IS NULL
+         AND datetime('now') BETWEEN datetime(a.starts_at) AND datetime(a.ends_at)
+        THEN 0 ELSE 1
+      END,
+      datetime(a.starts_at) DESC,
+      a.id DESC
+  `).all();
+}
+
+async function createAnnouncement({ title, message, startsAt, endsAt, userIds, createdByUserId }) {
+  const safeUserIds = normalizeIdArray(userIds);
+
+  if (isPostgres) {
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      const inserted = await client.query(
+        `INSERT INTO announcements (title, message, starts_at, ends_at, created_by_user_id)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id`,
+        [title, message, startsAt, endsAt, createdByUserId || null]
+      );
+      const announcementId = Number(inserted.rows[0].id);
+
+      for (const userId of safeUserIds) {
+        await client.query(
+          'INSERT INTO announcement_users (announcement_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [announcementId, userId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return announcementId;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  const tx = sqliteDb.transaction((payload) => {
+    const result = sqliteDb.prepare(
+      `INSERT INTO announcements (title, message, starts_at, ends_at, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(payload.title, payload.message, payload.startsAt, payload.endsAt, payload.createdByUserId || null);
+
+    const announcementId = Number(result.lastInsertRowid);
+    const grant = sqliteDb.prepare(
+      'INSERT OR IGNORE INTO announcement_users (announcement_id, user_id) VALUES (?, ?)'
+    );
+
+    for (const userId of payload.userIds) {
+      grant.run(announcementId, userId);
+    }
+
+    return announcementId;
+  });
+
+  return tx({ title, message, startsAt, endsAt, userIds: safeUserIds, createdByUserId });
+}
+
+async function updateAnnouncement(announcementId, { title, message, startsAt, endsAt, userIds }) {
+  const safeAnnouncementId = Number(announcementId);
+  const safeUserIds = normalizeIdArray(userIds);
+
+  if (!Number.isInteger(safeAnnouncementId) || safeAnnouncementId <= 0) {
+    return false;
+  }
+
+  if (isPostgres) {
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      const updated = await client.query(
+        `UPDATE announcements
+         SET title = $2, message = $3, starts_at = $4, ends_at = $5
+         WHERE id = $1
+         RETURNING id`,
+        [safeAnnouncementId, title, message, startsAt, endsAt]
+      );
+
+      if (!updated.rows.length) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+
+      await client.query('DELETE FROM announcement_users WHERE announcement_id = $1', [safeAnnouncementId]);
+      for (const userId of safeUserIds) {
+        await client.query(
+          'INSERT INTO announcement_users (announcement_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [safeAnnouncementId, userId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  const tx = sqliteDb.transaction((payload) => {
+    const result = sqliteDb.prepare(
+      `UPDATE announcements
+       SET title = ?, message = ?, starts_at = ?, ends_at = ?
+       WHERE id = ?`
+    ).run(payload.title, payload.message, payload.startsAt, payload.endsAt, payload.announcementId);
+
+    if (!result.changes) {
+      return false;
+    }
+
+    sqliteDb.prepare('DELETE FROM announcement_users WHERE announcement_id = ?').run(payload.announcementId);
+    const grant = sqliteDb.prepare(
+      'INSERT OR IGNORE INTO announcement_users (announcement_id, user_id) VALUES (?, ?)'
+    );
+    for (const userId of payload.userIds) {
+      grant.run(payload.announcementId, userId);
+    }
+
+    return true;
+  });
+
+  return tx({
+    announcementId: safeAnnouncementId,
+    title,
+    message,
+    startsAt,
+    endsAt,
+    userIds: safeUserIds
+  });
+}
+
+async function closeAnnouncement(announcementId) {
+  const safeAnnouncementId = Number(announcementId);
+  if (!Number.isInteger(safeAnnouncementId) || safeAnnouncementId <= 0) {
+    return false;
+  }
+
+  if (isPostgres) {
+    const result = await pgPool.query(
+      'UPDATE announcements SET closed_at = NOW() WHERE id = $1 AND closed_at IS NULL RETURNING id',
+      [safeAnnouncementId]
+    );
+    return Boolean(result.rows[0]);
+  }
+
+  const result = sqliteDb.prepare(
+    `UPDATE announcements
+     SET closed_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND closed_at IS NULL`
+  ).run(safeAnnouncementId);
+  return result.changes > 0;
+}
+
+async function listActiveAnnouncementsForUser(userId) {
+  const safeUserId = Number(userId);
+  if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+    return [];
+  }
+
+  if (isPostgres) {
+    const result = await pgPool.query(
+      `SELECT
+         a.id,
+         a.title,
+         a.message,
+         a.starts_at,
+         a.ends_at
+       FROM announcements a
+       INNER JOIN announcement_users au ON au.announcement_id = a.id
+       WHERE au.user_id = $1
+         AND a.closed_at IS NULL
+         AND NOW() BETWEEN a.starts_at AND a.ends_at
+       ORDER BY a.starts_at ASC, a.id ASC`,
+      [safeUserId]
+    );
+    return result.rows;
+  }
+
+  return sqliteDb.prepare(
+    `SELECT
+       a.id,
+       a.title,
+       a.message,
+       a.starts_at,
+       a.ends_at
+     FROM announcements a
+     INNER JOIN announcement_users au ON au.announcement_id = a.id
+     WHERE au.user_id = ?
+       AND a.closed_at IS NULL
+       AND datetime('now') BETWEEN datetime(a.starts_at) AND datetime(a.ends_at)
+     ORDER BY datetime(a.starts_at) ASC, a.id ASC`
+  ).all(safeUserId);
+}
+
 function getDatabaseEngineLabel() {
   return isPostgres ? 'postgres' : 'sqlite';
 }
@@ -1044,6 +1352,12 @@ module.exports = {
   listSystems,
   createSystem,
   updateSystem,
+  deleteSystem,
+  listAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  closeAnnouncement,
+  listActiveAnnouncementsForUser,
   getUserAccessibleSystems,
   registerHistoryEntry,
   listHistory,

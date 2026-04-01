@@ -1,0 +1,282 @@
+<%- include('partials/head', { title, theme }) %>
+
+<%
+  function toDateFromDb(value) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+      return null;
+    }
+
+    const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(raw);
+    const sqliteLike = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw);
+
+    if (sqliteLike) {
+      return new Date(raw.replace(' ', 'T') + 'Z');
+    }
+
+    if (!hasTimezone && /^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+      return new Date(raw + 'Z');
+    }
+
+    return new Date(raw);
+  }
+
+  function formatDateTime(value) {
+    const date = toDateFromDb(value);
+    if (!date || Number.isNaN(date.getTime())) {
+      return '-';
+    }
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'America/Fortaleza'
+    }).format(date);
+  }
+
+  function toDateTimeLocalValue(value) {
+    const date = toDateFromDb(value);
+    if (!date || Number.isNaN(date.getTime())) {
+      return '';
+    }
+
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'America/Fortaleza'
+    });
+
+    return formatter.format(date).replace(' ', 'T');
+  }
+
+  function getNoticeStatus(notice) {
+    const now = Date.now();
+    const startsAt = toDateFromDb(notice.starts_at);
+    const endsAt = toDateFromDb(notice.ends_at);
+    const closedAt = toDateFromDb(notice.closed_at);
+
+    if (closedAt) {
+      return { label: 'Encerrado', className: 'is-danger' };
+    }
+
+    if (startsAt && endsAt && now >= startsAt.getTime() && now <= endsAt.getTime()) {
+      return { label: 'Ativo', className: 'is-success' };
+    }
+
+    if (startsAt && now < startsAt.getTime()) {
+      return { label: 'Agendado', className: 'is-warning' };
+    }
+
+    return { label: 'Encerrado pelo prazo', className: '' };
+  }
+%>
+
+<main class="admin-page omega-page">
+  <header class="page-header glass-card omega-header">
+    <div class="admin-header-left">
+      <img src="<%= fixedLogoUrl %>" alt="Omega Distribuidora" class="omega-logo" onerror="this.onerror=null;this.src='/public/assets/omega-logo.svg';" />
+      <div>
+        <h1>Comunicados</h1>
+        <p>Crie avisos com janela de exibicao e controle quais usuarios precisam visualiza-los.</p>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <details class="admin-nav-dropdown">
+        <summary class="btn btn-secondary">Navegacao</summary>
+        <div class="admin-nav-menu glass-card">
+          <a href="/admin">Menu Admin</a>
+          <a href="/admin/users">Usuarios</a>
+          <a href="/admin/systems">Sistemas</a>
+          <a href="/admin/notices">Comunicados</a>
+          <a href="/admin/mappings">Mapeamentos</a>
+          <a href="/admin/history">Historico</a>
+          <a href="/dashboard">Painel Principal</a>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <%- include('partials/flash', { flash }) %>
+
+  <section class="split-grid admin-management-grid">
+    <article class="glass-card admin-section">
+      <div class="admin-section-head">
+        <div>
+          <h2 class="section-title">Novo Comunicado</h2>
+          <p class="muted">Defina prazo de inicio e fim. O popup aparece no dashboard enquanto estiver ativo.</p>
+        </div>
+        <button type="button" class="btn btn-primary" data-open-modal="notice-create-modal">Novo Comunicado</button>
+      </div>
+
+      <div class="admin-callout">
+        <strong>Popup bloqueante no dashboard</strong>
+        <p class="muted small">O usuario precisa clicar em OK para liberar o acesso aos cards dos sistemas enquanto houver aviso ativo para ele.</p>
+      </div>
+    </article>
+
+    <article class="glass-card admin-section">
+      <h2 class="section-title">Comunicados Cadastrados</h2>
+
+      <% if (!notices || !notices.length) { %>
+        <p class="muted">Nenhum comunicado criado ainda.</p>
+      <% } else { %>
+        <div class="compact-list">
+          <% notices.forEach((notice) => { %>
+            <% const status = getNoticeStatus(notice); %>
+            <div class="compact-row">
+              <div class="compact-main">
+                <strong><%= notice.title %></strong>
+                <span class="muted small"><%= formatDateTime(notice.starts_at) %> ate <%= formatDateTime(notice.ends_at) %></span>
+                <span class="muted small">Usuarios: <%= notice.user_names || 'Nenhum' %></span>
+                <span class="mapping-pill <%= status.className %>"><%= status.label %></span>
+              </div>
+              <button
+                type="button"
+                class="icon-edit-btn"
+                data-notice-edit
+                data-notice-id="<%= notice.id %>"
+                data-title="<%= notice.title %>"
+                data-message="<%= encodeURIComponent(notice.message || '') %>"
+                data-starts-at="<%= toDateTimeLocalValue(notice.starts_at) %>"
+                data-ends-at="<%= toDateTimeLocalValue(notice.ends_at) %>"
+                data-user-ids="<%= notice.user_ids || '' %>"
+                data-status-label="<%= status.label %>"
+                data-is-closed="<%= notice.closed_at ? '1' : '0' %>"
+                title="Editar comunicado"
+              >
+                &#9998;
+              </button>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </article>
+  </section>
+
+  <div class="admin-modal hidden" data-modal="notice-create-modal" aria-hidden="true">
+    <div class="admin-modal-backdrop" data-close-modal></div>
+    <div class="admin-modal-dialog admin-modal-dialog-wide glass-card" role="dialog" aria-modal="true" aria-labelledby="notice-create-modal-title">
+      <div class="admin-modal-header">
+        <div>
+          <h3 id="notice-create-modal-title">Novo Comunicado</h3>
+          <p class="muted small">Escolha o publico, o periodo e a mensagem que deve bloquear o dashboard.</p>
+        </div>
+        <button type="button" class="admin-modal-close" aria-label="Fechar popup" data-close-modal>&times;</button>
+      </div>
+
+      <form method="post" action="/admin/notices" class="form-stack compact admin-modal-form" data-reset-on-open>
+        <label>
+          Nome do comunicado
+          <input type="text" name="title" required />
+        </label>
+
+        <label>
+          Texto do comunicado
+          <textarea name="message" rows="5" required></textarea>
+        </label>
+
+        <div class="system-edit-grid notice-grid">
+          <label>
+            Inicio
+            <input type="datetime-local" name="starts_at" required />
+          </label>
+
+          <label>
+            Fim
+            <input type="datetime-local" name="ends_at" required />
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Usuarios que vao visualizar</legend>
+          <div class="check-grid">
+            <% usersBasic.forEach((user) => { %>
+              <label class="check-row">
+                <input type="checkbox" name="user_ids" value="<%= user.id %>" />
+                <span><%= user.username %></span>
+              </label>
+            <% }) %>
+          </div>
+        </fieldset>
+
+        <div class="form-actions-inline admin-modal-actions">
+          <button type="button" class="btn btn-ghost" data-close-modal>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Criar Comunicado</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="admin-modal hidden" data-modal="notice-edit-modal" aria-hidden="true">
+    <div class="admin-modal-backdrop" data-close-modal></div>
+    <div class="admin-modal-dialog admin-modal-dialog-wide glass-card" role="dialog" aria-modal="true" aria-labelledby="notice-edit-modal-title">
+      <div class="admin-modal-header">
+        <div>
+          <h3 id="notice-edit-modal-title" data-notice-edit-title>Editar Comunicado</h3>
+          <p class="muted small" data-notice-status>Atualize texto, publico ou prazo de exibicao.</p>
+        </div>
+        <button type="button" class="admin-modal-close" aria-label="Fechar popup" data-close-modal>&times;</button>
+      </div>
+
+      <form method="post" action="/admin/notices/0" class="form-stack compact admin-modal-form" data-notice-edit-form>
+        <label>
+          Nome do comunicado
+          <input type="text" name="title" data-notice-field="title" required />
+        </label>
+
+        <label>
+          Texto do comunicado
+          <textarea name="message" rows="5" data-notice-field="message" required></textarea>
+        </label>
+
+        <div class="system-edit-grid notice-grid">
+          <label>
+            Inicio
+            <input type="datetime-local" name="starts_at" data-notice-field="starts_at" required />
+          </label>
+
+          <label>
+            Fim
+            <input type="datetime-local" name="ends_at" data-notice-field="ends_at" required />
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Usuarios que vao visualizar</legend>
+          <div class="check-grid">
+            <% usersBasic.forEach((user) => { %>
+              <label class="check-row">
+                <input type="checkbox" name="user_ids" value="<%= user.id %>" data-notice-user-option />
+                <span><%= user.username %></span>
+              </label>
+            <% }) %>
+          </div>
+        </fieldset>
+
+        <div class="form-actions-inline admin-modal-actions">
+          <button
+            type="submit"
+            class="btn btn-danger"
+            formaction="/admin/notices/0/close"
+            formmethod="post"
+            data-notice-close
+          >
+            Encerrar Antes do Prazo
+          </button>
+          <button type="button" class="btn btn-ghost" data-notice-edit-cancel>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Alteracoes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+
+<%- include('partials/foot') %>

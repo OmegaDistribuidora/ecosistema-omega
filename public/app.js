@@ -291,6 +291,214 @@
 })();
 
 (function () {
+  const noticeOverlay = document.querySelector('[data-dashboard-notice]');
+  const okButton = document.querySelector('[data-dashboard-notice-ok]');
+  if (!noticeOverlay || !okButton) {
+    return;
+  }
+
+  document.body.classList.add('modal-open');
+  okButton.focus();
+
+  okButton.addEventListener('click', () => {
+    noticeOverlay.remove();
+    document.body.classList.remove('modal-open');
+  });
+})();
+
+(function () {
+  const modals = Array.from(document.querySelectorAll('[data-modal]'));
+  if (!modals.length) {
+    return;
+  }
+
+  const pageBody = document.body;
+
+  function resetFormState(modal) {
+    const form = modal.querySelector('form[data-reset-on-open]');
+    if (!form) {
+      return;
+    }
+
+    form.reset();
+  }
+
+  function focusFirstField(modal) {
+    const target = modal.querySelector('input, select, textarea, button');
+    if (target) {
+      target.focus();
+    }
+  }
+
+  function lockBody() {
+    pageBody.classList.add('modal-open');
+  }
+
+  function unlockBody() {
+    const hasOpenModal = modals.some((modal) => !modal.classList.contains('hidden'));
+    if (!hasOpenModal) {
+      pageBody.classList.remove('modal-open');
+    }
+  }
+
+  function closeModal(modal) {
+    if (!modal) {
+      return;
+    }
+
+    modal.classList.add('hidden');
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    unlockBody();
+  }
+
+  function openModal(modal) {
+    if (!modal) {
+      return;
+    }
+
+    modals.forEach((item) => {
+      if (item !== modal) {
+        closeModal(item);
+      }
+    });
+
+    resetFormState(modal);
+    modal.classList.remove('hidden');
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    lockBody();
+    window.requestAnimationFrame(() => focusFirstField(modal));
+  }
+
+  function openModalByName(name) {
+    const modal = document.querySelector(`[data-modal="${name}"]`);
+    openModal(modal);
+  }
+
+  document.querySelectorAll('[data-open-modal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      openModalByName(button.dataset.openModal);
+    });
+  });
+
+  document.addEventListener('click', (event) => {
+    const closeTrigger = event.target.closest('[data-close-modal]');
+    if (!closeTrigger) {
+      return;
+    }
+
+    closeModal(closeTrigger.closest('[data-modal]'));
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+
+    const openedModal = modals.find((modal) => !modal.classList.contains('hidden'));
+    if (openedModal) {
+      closeModal(openedModal);
+    }
+  });
+
+  window.AdminModal = {
+    open: openModal,
+    close: closeModal,
+    openByName: openModalByName,
+  };
+})();
+
+(function () {
+  const buttons = Array.from(document.querySelectorAll('[data-notice-edit]'));
+  const form = document.querySelector('[data-notice-edit-form]');
+  if (!buttons.length || !form) {
+    return;
+  }
+
+  const modal = form.closest('[data-modal]');
+  const title = modal && modal.querySelector('[data-notice-edit-title]');
+  const status = modal && modal.querySelector('[data-notice-status]');
+  const titleInput = form.querySelector('[data-notice-field="title"]');
+  const messageInput = form.querySelector('[data-notice-field="message"]');
+  const startsAtInput = form.querySelector('[data-notice-field="starts_at"]');
+  const endsAtInput = form.querySelector('[data-notice-field="ends_at"]');
+  const userOptions = Array.from(form.querySelectorAll('[data-notice-user-option]'));
+  const closeBtn = form.querySelector('[data-notice-close]');
+  const cancelBtn = form.querySelector('[data-notice-edit-cancel]');
+
+  function openFor(button) {
+    const noticeId = button.dataset.noticeId;
+    const noticeTitle = button.dataset.title || '';
+    const noticeMessage = decodeURIComponent(button.dataset.message || '');
+    const startsAt = button.dataset.startsAt || '';
+    const endsAt = button.dataset.endsAt || '';
+    const userIds = (button.dataset.userIds || '')
+      .split(',')
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0);
+    const statusLabel = button.dataset.statusLabel || '';
+    const isClosed = button.dataset.isClosed === '1';
+
+    form.action = `/admin/notices/${noticeId}`;
+    if (title) {
+      title.textContent = `Editar Comunicado: ${noticeTitle}`;
+    }
+    if (status) {
+      status.textContent = statusLabel ? `Status atual: ${statusLabel}.` : 'Atualize texto, publico ou prazo de exibicao.';
+    }
+    if (titleInput) {
+      titleInput.value = noticeTitle;
+    }
+    if (messageInput) {
+      messageInput.value = noticeMessage;
+    }
+    if (startsAtInput) {
+      startsAtInput.value = startsAt;
+    }
+    if (endsAtInput) {
+      endsAtInput.value = endsAt;
+    }
+
+    for (const option of userOptions) {
+      option.checked = userIds.includes(Number(option.value));
+    }
+
+    if (closeBtn) {
+      closeBtn.hidden = isClosed;
+      closeBtn.setAttribute('formaction', `/admin/notices/${noticeId}/close`);
+      closeBtn.dataset.noticeTitle = noticeTitle;
+    }
+
+    if (window.AdminModal && modal) {
+      window.AdminModal.open(modal);
+    }
+  }
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', () => openFor(button));
+  });
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+      if (window.AdminModal && modal) {
+        window.AdminModal.close(modal);
+      }
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (event) => {
+      const noticeTitle = closeBtn.dataset.noticeTitle || 'este comunicado';
+      const confirmed = window.confirm(`Encerrar ${noticeTitle} antes do prazo?`);
+      if (!confirmed) {
+        event.preventDefault();
+      }
+    });
+  }
+})();
+
+(function () {
   const buttons = Array.from(document.querySelectorAll('[data-user-edit]'));
   const form = document.querySelector('[data-user-edit-form]');
   if (!buttons.length || !form) {
@@ -299,10 +507,26 @@
 
   const title = form.querySelector('[data-user-edit-title]');
   const usernameInput = form.querySelector('[data-user-field="username"]');
+  const passwordInput = form.querySelector('[data-user-password-field]');
   const isAdminInput = form.querySelector('[data-user-field="is_admin"]');
   const systemOptions = Array.from(form.querySelectorAll('[data-user-system-option]'));
   const ssoInputs = Array.from(form.querySelectorAll('[data-user-sso-login]'));
   const cancelBtn = form.querySelector('[data-user-edit-cancel]');
+  const modal = form.closest('[data-modal]');
+
+  if (passwordInput) {
+    passwordInput.value = '';
+    passwordInput.dataset.userTyped = 'false';
+    passwordInput.addEventListener('input', () => {
+      passwordInput.dataset.userTyped = passwordInput.value ? 'true' : 'false';
+    });
+  }
+
+  form.addEventListener('submit', () => {
+    if (passwordInput && passwordInput.dataset.userTyped !== 'true') {
+      passwordInput.value = '';
+    }
+  });
 
   function openFor(button) {
     const id = button.dataset.userId;
@@ -330,6 +554,10 @@
     if (usernameInput) {
       usernameInput.value = username;
     }
+    if (passwordInput) {
+      passwordInput.value = '';
+      passwordInput.dataset.userTyped = 'false';
+    }
     if (isAdminInput) {
       isAdminInput.checked = isAdmin;
     }
@@ -344,8 +572,9 @@
       input.value = mappingIndex.get(systemId) || '';
     }
 
-    form.classList.remove('hidden');
-    form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (window.AdminModal && modal) {
+      window.AdminModal.open(modal);
+    }
   }
 
   for (const button of buttons) {
@@ -354,7 +583,9 @@
 
   if (cancelBtn) {
     cancelBtn.addEventListener('click', () => {
-      form.classList.add('hidden');
+      if (window.AdminModal && modal) {
+        window.AdminModal.close(modal);
+      }
     });
   }
 })();
@@ -373,7 +604,9 @@
   const ssoEnabledInput = form.querySelector('[data-system-field="sso_enabled"]');
   const ssoKeyInput = form.querySelector('[data-system-field="sso_key"]');
   const previewSelect = form.querySelector('[data-system-field="preview_image_url"]');
+  const deleteBtn = form.querySelector('[data-system-delete]');
   const cancelBtn = form.querySelector('[data-system-edit-cancel]');
+  const modal = form.closest('[data-modal]');
 
   function openFor(button) {
     const id = button.dataset.systemId;
@@ -406,9 +639,19 @@
     if (previewSelect) {
       previewSelect.value = preview;
     }
+    if (deleteBtn) {
+      deleteBtn.hidden = false;
+      deleteBtn.setAttribute('formaction', `/admin/systems/${id}/delete`);
+      deleteBtn.dataset.systemName = name;
+    }
+    const uploadInput = form.querySelector('input[name="card_image_file"]');
+    if (uploadInput) {
+      uploadInput.value = '';
+    }
 
-    form.classList.remove('hidden');
-    form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (window.AdminModal && modal) {
+      window.AdminModal.open(modal);
+    }
   }
 
   for (const button of buttons) {
@@ -417,7 +660,19 @@
 
   if (cancelBtn) {
     cancelBtn.addEventListener('click', () => {
-      form.classList.add('hidden');
+      if (window.AdminModal && modal) {
+        window.AdminModal.close(modal);
+      }
+    });
+  }
+
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', (event) => {
+      const systemName = deleteBtn.dataset.systemName || 'este sistema';
+      const confirmed = window.confirm(`Excluir ${systemName}? Esta acao nao pode ser desfeita.`);
+      if (!confirmed) {
+        event.preventDefault();
+      }
     });
   }
 })();
