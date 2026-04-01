@@ -1091,12 +1091,12 @@ async function listAnnouncements() {
         a.created_by_user_id,
         creator.username AS created_by_username,
         COALESCE(
-          string_agg(DISTINCT u.username, ', ' ORDER BY u.username)
+          string_agg(u.username, ', ' ORDER BY u.username)
             FILTER (WHERE u.username IS NOT NULL),
           ''
         ) AS user_names,
         COALESCE(
-          string_agg(DISTINCT au.user_id::text, ',' ORDER BY au.user_id)
+          string_agg(au.user_id::text, ',' ORDER BY au.user_id)
             FILTER (WHERE au.user_id IS NOT NULL),
           ''
         ) AS user_ids
